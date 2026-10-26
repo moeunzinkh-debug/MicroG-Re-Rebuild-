@@ -36,7 +36,7 @@ A ReVanced/Morphe-patched app is permanently bound to one GMS package name, chos
 | Patched for | Connects to | Release tag |
 |---|---|---|
 | `app.revanced.android.gms` | MicroG-RE `7.3.0-dev.2` | `microg-re-v7.3.0-dev.2` |
-| `org.microg.android.gms` | microG Personal | `microg-personal-v0.3.17.255070` |
+| `com.google.android.gms` | microG Personal (all-in-one) **or** Original-HW | `microg-personal-v0.3.17.255070` / `microg-original-hw-v0.3.17.255070` |
 | `com.google.android.gms` | Original microG Huawei (`-hw`) or real Play services | `microg-original-hw-v0.3.17.255070` |
 
 Every build now contains a **Self-Check → GMS compatibility** group that lists all installed GMS

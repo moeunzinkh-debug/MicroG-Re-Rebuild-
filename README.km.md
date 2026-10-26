@@ -2,9 +2,12 @@
 
 Repository នេះបង្កើត APK ចំនួន **៣ ប្រព័ន្ធ (៣ Editions ដាច់ដោយឡែកពីគ្នាទាំងស្រុង៖ Tag ខុសគ្នា, Package ខុសគ្នា, និងពណ៌ Icon ខុសគ្នា)** ទាំង **Release APK** និង **Debug APK** និងគ្មានបញ្ហាព្រមាន Malware ពេលដំឡើង៖
 
-1. 🟢 **`microG Personal` (`-personal` — សម្រាប់ប្រើផ្ទាល់ខ្លួន មិនសម្រាប់ដាក់លើ Play Store)** (`org.microg.android.gms`, Tag: `microg-personal-v0.3.17.255070`, **Icon ពណ៌បៃតងត្បូងមរកត**)
-   - **ដោះស្រាយដាច់ខាត ១០០% នូវបញ្ហា `Package signature does not match the installed app` នៅលើ Huawei Nova 4e (`MAR-AL00`, HarmonyOS 3.0.0)** និងទូរស័ព្ទគ្រប់ម៉ូដែលដែលមានសេវា Google/Play Store បង្កប់ក្នុង `/system` ស្រាប់!
-   - ផ្ដាច់ខ្លួនចេញពី Play Store ទាំងស្រុង (`vending_* = false` និងប្រើកញ្ចប់ឯករាជ្យ `org.microg.android.gms`) ព្រមទាំងចុះហត្ថលេខាផ្ទាល់ខ្លួន (Self-Signed RSA 4096-bit `v1 + v2 + v3`, បិទ `v4`) សម្រាប់ដំឡើងប្រើផ្ទាល់ខ្លួនតាម Browser ដោយគ្រាន់តែដំឡើង **១ ឯកសារគត់** (`org.microg.android.gms-255070302-personal-arm64-v8a.apk`)។
+1. 🟢 **`microG Personal` — APK តែមួយ ដែលមានសមត្ថភាព official + RE** (`com.google.android.gms`, Tag: `microg-personal-v0.3.17.255070`, **Icon ពណ៌បៃតងត្បូងមរកត**)
+   - Package **ដូច official** (`com.google.android.gms`) → Messenger, Telegram, WhatsApp, Grab, Discord ភ្ជាប់បានដូច official។
+   - App បំណះ (YouTube ReVanced / Morphe)៖ បំណះឡើងវិញជាមួយ **`GmsCoreVendorGroupId = com.google`** (ដូច MicroG-RE តែ vendor ជា `com.google` មិនមែន `app.revanced`)។
+   - Huawei signature.diff + ប៊ូតុង **Huawei** ពេលចូលគណនី។ ចុះហត្ថលេខាផ្ទាល់ខ្លួន RSA 4096 (`v1+v2+v3`)។
+   - **ត្រូវលុប official microG និង Personal ចាស់ (`org.microg.android.gms`) មុនដំឡើង** — package ដូច official ហត្ថលេខាខុស មិនអាចដំឡើងជាន់លើបាន។
+   - ឯកសារ៖ `com.google.android.gms-255070302-personal-arm64-v8a.apk`
 2. 🔵 **Original microG — Huawei Edition (`-hw`)** (`com.google.android.gms` + `com.android.vending`, Tag: `microg-original-hw-v0.3.17.255070`, **Icon ពណ៌ខៀវ**)
    - សម្រាប់ទូរស័ព្ទ Huawei ស៊េរីក្រោយឆ្នាំ ២០១៩ ដែល **គ្មានសេវា Google ក្នុង `/system` សោះ** (ឧ. Nova 7/8/9/10/11/12/13, P40/P50/P60/Pura 70, Mate 30/40/50/60)។
    - រួមបញ្ចូល `com.huawei.signature.diff.SignatureService` សម្រាប់ Huawei Signature Spoofing, ផែនទី Huawei HMS Maps + MapLibre/VTM, ប៊ូតុង **"Huawei"** ពេលចូលគណនី Google និងការកែបញ្ហាចូលគណនី Aurora Store / VPN។

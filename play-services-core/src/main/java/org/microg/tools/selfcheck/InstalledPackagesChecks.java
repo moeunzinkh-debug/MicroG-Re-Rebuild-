@@ -46,8 +46,11 @@ public class InstalledPackagesChecks implements SelfCheckGroup {
     @Override
     public void doChecks(Context context, ResultCollector collector) {
         String basePkg = com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME;
-        if ("org.microg".equals(basePkg)) {
-            // Personal standalone non-Play-Store build: verify only our standalone GMS package is installed
+        String edition = com.google.android.gms.BuildConfig.EDITION_TAG;
+        if ("org.microg".equals(basePkg) || "MicroG-Personal".equals(edition)) {
+            // Personal is self-signed (not the Google/NOGAPPS cert). Only check
+            // that our GMS package is present — a Google-signature check would
+            // always fail and is not required for sideload use.
             addPackageInstalledResult(context, collector, context.getString(R.string.self_check_pkg_gms), Constants.GMS_PACKAGE_NAME);
             return;
         }

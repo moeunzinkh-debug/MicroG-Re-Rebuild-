@@ -294,9 +294,22 @@ android {
         "personal" {
             dimension 'target'
             versionNameSuffix "-personal"
-            matchingFallbacks = ['default']
+            // Single APK the user asked for: official identity so Messenger /
+            // Telegram / Grab bind to us, Huawei signature.diff, Personal branding.
+            // Patched ReVanced/Morphe apps must use GmsCoreVendorGroupId=com.google.
+            applicationId "com.google.android.gms"
+            matchingFallbacks = ['huawei', 'default']
             buildConfigField "String", "EDITION_TAG", "\"MicroG-Personal\""
             buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-personal-v\""
+            buildConfigField "String", "BASE_PACKAGE_NAME", "\"com.google\""
+            manifestPlaceholders.basePackageName = "com.google"
+            resValue "string", "var_authenticator_account_type", "com.google"
+            resValue "string", "var_contact_syncadapter_account_type", "com.google"
+            resValue "string", "var_pref_auth_action_security_settings", "com.google.android.gms.accountsettings.SECURITY_SETTINGS"
+            resValue "string", "var_pref_auth_action_privacy_settings", "com.google.android.gms.accountsettings.PRIVACY_SETTINGS"
+            resValue "string", "var_pref_auth_action_preferences_settings", "com.google.android.gms.accountsettings.ACCOUNT_PREFERENCES_SETTINGS"
+            resValue "string", "var_pref_start_gms_package", "com.google.android.gms"
+            resValue "string", "package_id", "com.google.android.gms"
         }
         "user" {
             dimension 'target'
