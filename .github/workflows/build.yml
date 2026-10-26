@@ -48,6 +48,15 @@ jobs:
         with:
           cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
 
+      - name: "Setup matchers"
+        run: |
+          matchers_dir='${{ github.workspace }}/.github/matchers'
+          for NAME in gradle-build-matcher.json gradle-build-kotlin-error-matcher.json; do
+            if test -f "${matchers_dir}/${NAME}"; then
+              echo "::add-matcher::${matchers_dir}/${NAME}"
+            fi
+          done
+
       - name: "Prepare v1+v2+v3 signing keystores"
         env:
           SECRET_KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
@@ -91,6 +100,7 @@ jobs:
 
       - name: "Build ${{ matrix.target }} APK variants"
         run: |
+          set -o pipefail
           TARGET="${{ matrix.target }}"
           LOWER="$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')"
           OUT_DIR="play-services-core/build/outputs/apk/default/${LOWER}"
@@ -107,11 +117,15 @@ jobs:
             local dest_name="$2"
             rm -rf "$OUT_DIR"
             # shellcheck disable=SC2086
-            ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args
+            if ! ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"; then
+              ERR_MSG="$(grep -E "FAILURE:|What went wrong:|^\* |^> |Exception|Error|e: " "$RUNNER_TEMP/gradle.log" | head -n 20 | tr '\n' ' ')"
+              echo "::error title=Gradle Build Error (${dest_name})::${ERR_MSG}"
+              exit 1
+            fi
             local built_apk
             built_apk="$(find "$OUT_DIR" -maxdepth 2 -name '*.apk' | head -n 1)"
             if [[ -z "$built_apk" || ! -f "$built_apk" ]]; then
-              echo "ERROR: Expected APK not found in $OUT_DIR" >&2
+              echo "::error title=Missing APK::Expected APK not found in $OUT_DIR"
               exit 1
             fi
             cp "$built_apk" "dist/$dest_name"
@@ -140,9 +154,15 @@ jobs:
 
       - name: "Verify v1+v2+v3 signatures and merged APK permissions"
         run: |
-          bash scripts/verify_built_apk.sh dist/*.apk
+          if ! bash scripts/verify_built_apk.sh dist/*.apk 2>&1 | tee "$RUNNER_TEMP/verify.log"; then
+            ERR_MSG="$(tail -n 20 "$RUNNER_TEMP/verify.log" | tr '\n' ' ')"
+            echo "::error title=APK Verification Failed::${ERR_MSG}"
+            exit 1
+          fi
           (cd dist && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
           (cd dist-arm64 && sha256sum *.apk > SHA256SUMS.txt)
+          SUMMARY="$(cd dist && ls -lh *.apk | awk '{print $9 "(" $5 ")"}' | tr '\n' ' ') | SHA256: $(tr '\n' '; ' < dist/SHA256SUMS.txt)"
+          echo "::notice title=${{ matrix.target }} APKs Verified (v1+v2+v3 & Clean Manifest)::${SUMMARY}"
 
       - name: "Upload ARM64 ${{ matrix.target }} APKs"
         uses: actions/upload-artifact@v7
