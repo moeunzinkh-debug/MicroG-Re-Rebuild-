@@ -44,6 +44,11 @@ implementations side by side and scans each patched app's DEX files to report wh
 expects — with the exact `GmsCoreVendorGroupId` to use when re-patching. The scan is cached per APK
 size/mtime and only touches apps whose package name carries a known patcher marker.
 
+Personal also republishes official microG `v0.3.17.252432` Google-legacy C2DM / Sign-In / Games
+intent actions (`com.google.android.c2dm.*`, `com.google.android.gms.auth.api.signin.service.START`,
+…) so unpatched apps that fire **implicit** GMS intents can reach it. Apps that bind with
+`setPackage("com.google.android.gms")` still need Original-HW. See [README.km.md](README.km.md) §៩.
+
 What microG cannot do: satisfy Play Integrity hardware attestation (ChatGPT, Grok, Google Wallet,
 banking apps). Those need a real Google-certified device or a PWA. Khmer details: [README.km.md](README.km.md).
 

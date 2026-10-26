@@ -192,8 +192,8 @@ patch ប្តូរ `com.google.android.gms` ក្នុង app ទៅជា�
 | កម្មវិធី | ស្ថានភាព | ដំណោះស្រាយត្រឹមត្រូវ |
 |---|---|---|
 | **ChatGPT, Grok, Google Wallet, ធនាគារ** ដែលតម្រូវ Play Integrity | ❌ មិនអាចគាំទ្របាន — ត្រូវការ hardware attestation ពី Google ពិត | ប្រើ PWA: `chatgpt.com` / `grok.com` → Chrome/Brave menu → **Add to Home Screen**; ឬ Grok ក្នុង X ដែលបានបំណះ |
-| **Facebook, Messenger, Telegram** (unpatched) | ⚠️ មិនត្រូវការ microG ទេ | ដំឡើង APK ផ្លូវការ (Telegram ពី `telegram.org/android`); FB/Messenger ប្រើ HMS Push លើ Huawei |
-| **App unpatched ដែល hardcode `com.google.android.gms`** | ⚠️ បានតែជាមួយ build `com.google.*` | ប្រើ 🔵 `-hw` edition (តែលើ Nova 4e ត្រូវដោះ `priv-app` conflict ជាមុន) ឬបំណះ app នោះ |
+| **Facebook, Messenger, Telegram, WhatsApp, Discord** (unpatched) | ⚠️ Push/FCM ល្អបំផុតជាមួយ 🔵 `-hw` (`com.google.android.gms`); 🟢 Personal ឥឡូវចាប់ C2DM Google-legacy បាន (intent មិនដាក់ `setPackage`) | ប្រើ 🔵 `-hw` បើដំឡើងបាន; បើ Nova 4e ទាស់ហត្ថលេខា `/system` → 🟢 Personal កំណែថ្មីនេះ |
+| **App unpatched ដែល hardcode `com.google.android.gms`** | ⚠️ bind ជាមួយ `setPackage("com.google.android.gms")` ត្រូវការ 🔵 `-hw` | ប្រើ 🔵 `-hw` edition (តែលើ Nova 4e ត្រូវដោះ `priv-app` conflict ជាមុន) ឬបំណះ app នោះ |
 | **HMS Push (AppGallery push) សម្រាប់ app ក្រៅ AppGallery** | ❌ មិនអាច — ត្រូវការ AGC app registration + AppGallery distribution | ប្រើ microG GCM (MCS) ធម្មតា ឬបើក Autostart/បិទ battery optimization លើ EMUI |
 
 > សេចក្តីសង្ខេប៖ microG អាចគាំទ្រ **patched apps**, **Contacts Sync**, **Passkeys/2FA**, **Find My Device**, និង **app ដែល hardcode `com.google.android.gms` តាមរយៈ build `-hw`**។ វាមិនអាចបំពេញ **Play Integrity hardware attestation** បានឡើយ ព្រោះវាជាការផ្ទៀងផ្ទាត់ខាង Google server ជាមួយ hardware key ដែល microG គ្មាន។
@@ -222,3 +222,30 @@ adb install org.microg.android.gms-255070302-personal-arm64-v8a.apk
 ```
 ចាប់ពីពេលនេះទៅ APK ថ្មីៗ **ដំឡើងជាន់លើបានធម្មតា** (គ្រាន់តែចុច Install ក្នុង Browser/AppGallery)។
 ចំណាំ៖ ការដំឡើងជាន់លើត្រូវធ្វើលើ **package ដូចគ្នា** ដូច្នេះ `microG Personal`, `MicroG-RE` និង `-hw` គឺជា app ដាច់ដោយឡែកពីគ្នា ហើយ update ដោយឡែកពីគ្នា។
+
+---
+
+## ៩. អ្វីដែលយើងយកពី official microG [`v0.3.17.252432`](https://github.com/microg/GmsCore/releases/tag/v0.3.17.252432)
+
+បានពិនិត្យ source ផ្លូវការ (`microg/GmsCore`, tag `v0.3.17.252432`, ២៩ កញ្ញា ២០២៦) ប្រៀបធៀបនឹង repo នេះ។ **មុខងារ GMS (Phenotype, Age Signals, Home dummy, Maps, Fido, DroidGuard, Games, Auth…) មានរួចហើយ** — ភាពខុសគ្នាដែលធ្វើឲ្យ official **គាំទ្រ app បានច្រើនជាង** មិនមែនជា module ខ្វះទេ គឺ **ឈ្មោះ package និង protocol ដែល app unpatched hardcode**:
+
+| ចំណុច official | មុននេះ (Personal) | ឥឡូវ (យកមកហើយ) |
+|---|---|---|
+| Package `com.google.android.gms` | `org.microg.android.gms` (ដើម្បីចៀស `/system` signature mismatch) | នៅដដែល — ប្តូរមិនបានដោយគ្មានទាស់ system GMS។ 🔵 `-hw` គឺសមមូល official `-hw` |
+| C2DM `com.google.android.c2dm.intent.{REGISTER,UNREGISTER,RECEIVE}` | មានតែ `org.microg.android.c2dm.*` | ✅ Personal ចុះឈ្មោះ **ទាំងពីរ** (Google-legacy + namespaced) |
+| Permission `com.google.android.c2dm.permission.{RECEIVE,SEND}` | មានតែ `org.microg.android.c2dm.*` | ✅ Personal ប្រកាសឈ្មោះ Google ដូច official (IsolateManifest អនុញ្ញាត; cert ដូច `-hw` → Android អនុញ្ញាត duplicate) |
+| FCM delivery | ផ្ញើតែ namespaced action | ✅ `McsService` សាក receiver របស់ app ហើយផ្ញើ **Google-legacy** បើ app ចុះឈ្មោះឈ្មោះនោះ (ដូច Telegram/Messenger) |
+| `com.google.iid.TOKEN_REQUEST` | `org.microg.iid.TOKEN_REQUEST` | ✅ Personal ចាប់ Google IID token request |
+| Sign-In `com.google.android.gms.auth.api.signin.service.START` + `GOOGLE_SIGN_IN` | មានតែ namespaced | ✅ Personal ចាប់ Google Sign-In intent (implicit) |
+| Games `com.google.android.gms.games.service.START` | មានតែ namespaced | ✅ Personal ចាប់ Google Play Games intent (implicit) |
+| Location `com.google.android.location.internal.GoogleLocationManagerService.START` | មានតែ namespaced | ✅ គ្រប់ flavor (official name + namespaced) |
+
+### អ្វីដែល **នៅតែ** ត្រូវការ 🔵 Original-HW / official `-hw`
+Client library របស់ Google សម័យថ្មី **តែងតែ** `intent.setPackage("com.google.android.gms")`។ Intent-filter alias មិនអាចបញ្ឆោត `setPackage` បានទេ — មានតែ app ដែលដំឡើងជា `com.google.android.gms` (🔵 `-hw` ឬ official) ទើប bind បាន។
+
+លើ **HarmonyOS 3.1+ / EMUI 13.1+** official `-hw` បានចុះហត្ថលេខាដោយសោ **NOGAPPS** (`10321bd8…`) ដែល Huawei allowlist សម្រាប់ signature spoofing។ សោយើងជា self-signed → spoofing native មិនដំណើរការ។ លើ **Nova 4e HarmonyOS 3.0.0** OS មិនមាន spoofing សោះ សូម្បី official ក៏ដូច្នេះដែរ។
+
+### អ្វីដែល **មិនយក** ពី official
+- Package `com.google.android.gms` លើ Personal (នឹងទាស់ `/system` លើ Nova 4e)
+- Authority `com.google.android.gsf.gservices` លើ Personal (នឹងទាស់ 🔵 `-hw` បើដំឡើងទន្ទឹម)
+- Play Integrity / SafetyNet hardware attestation (official ក៏មិនឆ្លងដែរ)

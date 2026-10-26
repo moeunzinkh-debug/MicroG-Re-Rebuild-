@@ -368,13 +368,25 @@ abstract class IsolateManifestTask extends DefaultTask {
         String basePkg = appId.endsWith(".android.gms")
                 ? appId.substring(0, appId.length() - ".android.gms".length())
                 : appId
+        // Google C2DM / GSF permission names that unpatched apps (Telegram, Messenger,
+        // WhatsApp, Facebook, …) hardcode. Official microG always declares these; we
+        // keep them as shared protocol names so Personal can talk to those apps without
+        // becoming com.google.android.gms. Same-certificate duplicates with Original-HW
+        // are allowed by Android.
+        def googleSharedProtocol = [
+            "com.google.android.c2dm.permission.RECEIVE",
+            "com.google.android.c2dm.permission.SEND",
+            "com.google.android.providers.gsf.permission.READ_GSERVICES",
+            "com.google.android.gtalkservice.permission.GTALK_SERVICE",
+        ] as Set
         def isOwned = { String id ->
             id == appId ||
             id.startsWith(appId + ".") ||
             id.startsWith(basePkg + ".android.") ||
             id.startsWith(basePkg + ".firebase.") ||
             id == (basePkg + ".settings") ||
-            id.startsWith("android.permission-group.")
+            id.startsWith("android.permission-group.") ||
+            googleSharedProtocol.contains(id)
         }
 
         def dbf = DocumentBuilderFactory.newInstance()

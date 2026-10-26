@@ -605,14 +605,22 @@ public class McsService extends Service implements Handler.Callback {
         database.noteAppMessage(packageName, DataMessageStanza.ADAPTER.encodedSize(msg));
         GcmDatabase.App app = database.getApp(packageName);
 
-        // Apps patched for the renamed base package listen on the package-scoped action;
-        // deliver with whichever action the app actually has a receiver registered for.
+        // Deliver with whichever C2DM action the app actually registered a receiver for.
+        // Patched apps listen on the namespaced action; unpatched apps (official microG /
+        // Play Services client libraries) listen on the Google legacy action.
         String deliveryAction = ACTION_C2DM_RECEIVE;
         Intent probe = new Intent(ACTION_C2DM_RECEIVE_PACKAGE);
         probe.setPackage(packageName);
         List<ResolveInfo> packageReceivers = getPackageManager().queryBroadcastReceivers(probe, 0);
         if (packageReceivers != null && !packageReceivers.isEmpty()) {
             deliveryAction = ACTION_C2DM_RECEIVE_PACKAGE;
+        } else if (!ACTION_C2DM_RECEIVE_LEGACY.equals(ACTION_C2DM_RECEIVE)) {
+            Intent legacyProbe = new Intent(ACTION_C2DM_RECEIVE_LEGACY);
+            legacyProbe.setPackage(packageName);
+            List<ResolveInfo> legacyReceivers = getPackageManager().queryBroadcastReceivers(legacyProbe, 0);
+            if (legacyReceivers != null && !legacyReceivers.isEmpty()) {
+                deliveryAction = ACTION_C2DM_RECEIVE_LEGACY;
+            }
         }
 
         Intent intent = new Intent();
