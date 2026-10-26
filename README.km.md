@@ -10,7 +10,7 @@ Repository នេះបង្កើត APK ចំនួន **៣ ប្រព័
    - រួមបញ្ចូល `com.huawei.signature.diff.SignatureService` សម្រាប់ Huawei Signature Spoofing, ផែនទី Huawei HMS Maps + MapLibre/VTM, ប៊ូតុង **"Huawei"** ពេលចូលគណនី Google និងការកែបញ្ហាចូលគណនី Aurora Store / VPN។
 3. 🔴 **MicroG-RE `7.3.0-dev.2`** (`app.revanced.android.gms`, Tag: `microg-re-v7.3.0-dev.2`, **Icon ពណ៌ក្រហម**)
    - សម្រាប់កម្មវិធីដែលបាន Patch រួច (YouTube ReVanced / Morphe, YT Music, Reddit, TikTok, Google Photos ។ល។) លើទូរស័ព្ទគ្រប់ម៉ាក រួមទាំង Huawei Nova 4e (`MAR-AL00`) ផងដែរ។
-   - **អាចដំឡើងទន្ទឹមគ្នាទាំង ៣ (Side-by-Side)** ដោយមិនជាន់ឈ្មោះកញ្ចប់ (`Package Name`) ឬរូបតំណាងកម្មវិធីគ្នាឡើយ!
+   - **អាចដំឡើងទន្ទឹមគ្នាទាំង ៣ (Side-by-Side)** ដោយមិនជាន់ឈ្មោះកញ្ចប់ (`Package Name`), សិទ្ធិ (`<permission>`), Content Provider (`<provider android:authorities>`) ឬរូបតំណាងកម្មវិធីគ្នាឡើយ (សូម្បីតែជាមួយ ReVanced GmsCore / MicroG-RE កំណែចាស់ក៏អាចដំឡើងទន្ទឹមគ្នាជាមួយ `microG Personal` បានដែរ ព្រោះបានផ្ដាច់ `org.microg.gms.maps.vtm.tile` និង `org.microg.gms.{STATUS_BROADCAST,EXTENDED_ACCESS,PROVISION}` ទៅជា `${basePackageName}.android.gms.*` និងមាន `IsolateManifestTask` ការពារ ១០០%)!
 
 ---
 

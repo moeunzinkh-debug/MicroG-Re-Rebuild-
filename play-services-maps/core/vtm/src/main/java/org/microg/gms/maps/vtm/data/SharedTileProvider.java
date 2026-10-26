@@ -30,10 +30,10 @@ import com.google.android.gms.base.BuildConfig;
  */
 public class SharedTileProvider extends ContentProvider {
     private static final String DB_NAME = "tilecache.db";
-    // Must match the manifest authority (${basePackageName}.gms.maps.vtm.tile) for every flavor;
-    // the fork renamed the manifest placeholder but not this constant, which made tile cache
-    // lookups fail with "Failed to find provider info for org.microg.gms.maps.vtm.tile".
-    public static final String PROVIDER_NAME = BuildConfig.BASE_PACKAGE_NAME + ".gms.maps.vtm.tile";
+    // Must match the manifest authority (${basePackageName}.android.gms.maps.vtm.tile) for every
+    // flavor; using .android.gms. instead of .gms. also avoids colliding with legacy ReVanced /
+    // MicroG-RE builds that hardcoded org.microg.gms.maps.vtm.tile when basePackageName=org.microg.
+    public static final String PROVIDER_NAME = BuildConfig.BASE_PACKAGE_NAME + ".android.gms.maps.vtm.tile";
     public static final Uri PROVIDER_URI = Uri.parse("content://" + PROVIDER_NAME);
 
     private SQLiteHelper sqLiteHelper;

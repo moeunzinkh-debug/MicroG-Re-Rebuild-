@@ -110,7 +110,7 @@ public class PackageUtils {
      */
     @Deprecated
     public static boolean callerHasExtendedAccessPermission(@NonNull Context context) {
-        return context.checkCallingPermission(BuildConfig.BASE_PACKAGE_NAME + ".gms.EXTENDED_ACCESS") == PackageManager.PERMISSION_GRANTED;
+        return context.checkCallingPermission(BuildConfig.BASE_PACKAGE_NAME + ".android.gms.EXTENDED_ACCESS") == PackageManager.PERMISSION_GRANTED;
     }
 
     public static void assertGooglePackagePermission(@NonNull Context context, GooglePackagePermission permission) {

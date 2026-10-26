@@ -154,6 +154,25 @@ def main() -> int:
             f"libs={sorted(item['library'])}"
         )
 
+    legacy_forbidden = []
+    for item in parsed:
+        for perm in sorted(item["permission"]):
+            if perm.startswith("org.microg.gms."):
+                legacy_forbidden.append(("permission", perm, item["apk"]))
+        for auth in sorted(item["provider_authority"]):
+            if auth.startswith("org.microg.gms."):
+                legacy_forbidden.append(("provider_authority", auth, item["apk"]))
+
+    if legacy_forbidden:
+        print(
+            "\nERROR: Legacy un-isolated org.microg.gms.* declaration(s) detected "
+            "(would collide with legacy ReVanced/MicroG-RE APKs):",
+            file=sys.stderr,
+        )
+        for cat, val, apk_name in legacy_forbidden:
+            print(f"  - [{cat}] '{val}' in {apk_name}", file=sys.stderr)
+        return 1
+
     collisions = []
     for cat in categories:
         seen = {}
