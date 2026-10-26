@@ -325,7 +325,7 @@ class SettingsFragment : ResourceSettingsFragment() {
     }
 
     private fun openGithub() {
-        val url = if (com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME == "com.google") {
+        val url = if (com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME != "app.revanced") {
             PREF_ORIGINAL_GITHUB_URL
         } else {
             PREF_GITHUB_URL

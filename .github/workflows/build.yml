@@ -13,12 +13,13 @@ on:
   workflow_dispatch:
     inputs:
       edition:
-        description: "Which edition to build (both | microg-re | microg-original-hw)"
+        description: "Which edition to build (all | microg-personal | microg-re | microg-original-hw)"
         required: false
-        default: "both"
+        default: "all"
         type: choice
         options:
-          - both
+          - all
+          - microg-personal
           - microg-re
           - microg-original-hw
 
@@ -31,7 +32,7 @@ jobs:
     name: "[MicroG-RE] ${{ matrix.target }}"
     if: >-
       (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'arena/')) &&
-      (inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-re')
+      (inputs.edition == '' || inputs.edition == 'all' || inputs.edition == 'both' || inputs.edition == 'microg-re')
     runs-on: ubuntu-latest
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
@@ -129,12 +130,13 @@ jobs:
             SUFFIX="-debug"
           fi
 
+          : > "$RUNNER_TEMP/gradle.log"
           build_variant() {
             local extra_args="$1"
             local dest_name="$2"
             rm -rf "$OUT_DIR"
             # shellcheck disable=SC2086
-            if ! ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"; then
+            if ! ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/gradle.log"; then
               ERR_MSG="$(grep -E "FAILURE:|What went wrong:|^\* |^> |Exception|Error|e: " "$RUNNER_TEMP/gradle.log" | head -n 20 | sed -E 's/(storePassword|keyPassword)=[^,}]*/\1=REDACTED/g' | tr '\n' ' ')"
               echo "::error title=Gradle Build Error (${dest_name})::${ERR_MSG}"
               exit 1
@@ -176,6 +178,10 @@ jobs:
             echo "::error title=APK Verification Failed::${ERR_MSG}"
             exit 1
           fi
+          RE_ISO="$(grep 'ISOLATE_MANIFEST' "$RUNNER_TEMP/gradle.log" | sort -u | tr '\n' '; ' || true)"
+          if [[ -n "$RE_ISO" ]]; then
+            echo "::notice title=MicroG-RE Isolated AAR Collisions (${{ matrix.target }})::${RE_ISO}"
+          fi
           (cd dist && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
           (cd dist-arm64 && sha256sum *.apk > SHA256SUMS.txt)
           SUMMARY="$(cd dist && ls -lh *.apk | awk '{print $9 "(" $5 ")"}' | tr '\n' ' ') | SHA256: $(tr '\n' '; ' < dist/SHA256SUMS.txt)"
@@ -199,7 +205,7 @@ jobs:
     name: "[MicroG-Original-HW] ${{ matrix.target }}"
     if: >-
       (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'arena/')) &&
-      (inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-original-hw')
+      (inputs.edition == '' || inputs.edition == 'all' || inputs.edition == 'both' || inputs.edition == 'microg-original-hw')
     runs-on: ubuntu-latest
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
@@ -392,7 +398,7 @@ jobs:
     needs: [build]
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-re')
+      (inputs.edition == '' || inputs.edition == 'all' || inputs.edition == 'both' || inputs.edition == 'microg-re')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -457,7 +463,7 @@ jobs:
     needs: [build-huawei]
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-original-hw')
+      (inputs.edition == '' || inputs.edition == 'all' || inputs.edition == 'both' || inputs.edition == 'microg-original-hw')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -510,3 +516,302 @@ jobs:
               --notes "$NOTES"
           fi
           echo "::notice title=Published MicroG-Original-HW Tag::Tag=${TAG_NAME} -> https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"
+
+  build-personal:
+    name: "[MicroG-Personal Non-PlayStore] ${{ matrix.target }}"
+    if: >-
+      (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'arena/')) &&
+      (inputs.edition == '' || inputs.edition == 'all' || inputs.edition == 'microg-personal')
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [Debug, Release]
+
+    steps:
+      - name: "Free disk space"
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/go
+          df -h
+
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: "Check sensitive install permissions"
+        run: python3 scripts/check_sensitive_manifest_permissions.py
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: "Setup Gradle"
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
+
+      - name: "Setup matchers"
+        run: |
+          matchers_dir='${{ github.workspace }}/.github/matchers'
+          for NAME in gradle-build-matcher.json gradle-build-kotlin-error-matcher.json; do
+            if test -f "${matchers_dir}/${NAME}"; then
+              echo "::add-matcher::${matchers_dir}/${NAME}"
+            fi
+          done
+
+      - name: "Prepare Personal Self-Signed Keystores (Not For Play Store)"
+        env:
+          SECRET_KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          SECRET_KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          SECRET_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          SECRET_KEY_PASS: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
+        run: |
+          KEY_DIR="$RUNNER_TEMP/keystore-personal"
+          mkdir -p "$KEY_DIR"
+
+          DBG_PASS="$(openssl rand -hex 16)"
+          REL_PASS="$(openssl rand -hex 16)"
+          KEYSTORE_DIR="$KEY_DIR" \
+          KEYSTORE_PASSWORD="$REL_PASS" \
+          KEYSTORE_ENTRY_ALIAS="microg-release" \
+          DEBUG_KEYSTORE_PASSWORD="$DBG_PASS" \
+          DEBUG_KEYSTORE_ENTRY_ALIAS="microg-dev" \
+          bash scripts/generate_keystore.sh >/dev/null
+
+          echo "DEBUG_KEYSTORE_FILE=$KEY_DIR/debug.p12" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_ALIAS=microg-dev" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+
+          if [[ -n "$SECRET_KEYSTORE_B64" && -n "$SECRET_KEYSTORE_ALIAS" && -n "$SECRET_KEYSTORE_PASS" ]]; then
+            echo "$SECRET_KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEY_DIR/custom-release.keystore"
+            echo "KEYSTORE_FILE=$KEY_DIR/custom-release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          else
+            echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+          fi
+
+      - name: "Build Personal Non-Play-Store (-personal) ${{ matrix.target }} APKs"
+        run: |
+          set -o pipefail
+          TARGET="${{ matrix.target }}"
+          LOWER_TARGET="$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')"
+          SUFFIX=""
+          if [[ "$LOWER_TARGET" == "debug" ]]; then
+            SUFFIX="-debug"
+          fi
+
+          GMS_VC="$(grep -oP 'def ourGmsVersionCode = \K[0-9]+' build.gradle)"
+          OUT_DIR="play-services-core/build/outputs/apk/personal/${LOWER_TARGET}"
+          mkdir -p dist-personal dist-personal-arm64
+
+          : > "$RUNNER_TEMP/gradle-personal.log"
+          build_personal_apk() {
+            local extra_args="$1"
+            local dest_name="$2"
+            rm -rf "$OUT_DIR"
+            # shellcheck disable=SC2086
+            if ! ./gradlew ":play-services-core:assemblePersonal${TARGET}" -PbasePackageName=org.microg $extra_args --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/gradle-personal.log"; then
+              ERR="$(grep -E 'FAILURE:|What went wrong:|^\* |Exception|Error:|error:' "$RUNNER_TEMP/gradle-personal.log" | tail -n 30 | tr '\n' ' ')"
+              echo "::error title=Personal Gradle Build Failed (${dest_name})::${ERR}"
+              exit 1
+            fi
+            local built
+            built="$(find "$OUT_DIR" -maxdepth 2 -name '*.apk' | head -n 1)"
+            if [[ -z "$built" ]]; then
+              echo "::error title=Missing Personal APK::No APK found in $OUT_DIR"
+              exit 1
+            fi
+            cp "$built" "dist-personal/$dest_name"
+          }
+
+          # 1. ARM64-v8a Personal APK (Huawei Nova 4e MAR-AL00 Kirin 710 HarmonyOS 3.0.0 & all 64-bit phones)
+          build_personal_apk "-Pabi=arm64-v8a" "org.microg.android.gms-${GMS_VC}-personal${SUFFIX}-arm64-v8a.apk"
+          cp "dist-personal/org.microg.android.gms-${GMS_VC}-personal${SUFFIX}-arm64-v8a.apk" "dist-personal-arm64/"
+
+          # 2. ARMv7 32-bit Personal APK
+          build_personal_apk "-Pabi=armeabi-v7a" "org.microg.android.gms-${GMS_VC}-personal${SUFFIX}-armeabi-v7a.apk"
+
+          # 3. Universal Personal APK
+          build_personal_apk "" "org.microg.android.gms-${GMS_VC}-personal${SUFFIX}.apk"
+
+      - name: "Explicitly Align, Self-Sign (v1+v2+v3, non-Play-Store) & Verify Personal APKs"
+        run: |
+          LOWER_TARGET="$(echo "${{ matrix.target }}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$LOWER_TARGET" == "debug" ]]; then
+            SIGN_KS="$DEBUG_KEYSTORE_FILE"
+            SIGN_PASS="$DEBUG_KEYSTORE_PASSWORD"
+            SIGN_ALIAS="$DEBUG_KEYSTORE_ENTRY_ALIAS"
+            export SIGN_KEY_PASS="$DEBUG_KEYSTORE_ENTRY_PASSWORD"
+          else
+            SIGN_KS="$KEYSTORE_FILE"
+            SIGN_PASS="$KEYSTORE_PASSWORD"
+            SIGN_ALIAS="$KEYSTORE_ENTRY_ALIAS"
+            export SIGN_KEY_PASS="$KEYSTORE_ENTRY_PASSWORD"
+          fi
+
+          bash scripts/sign_personal_apk.sh "$SIGN_KS" "$SIGN_PASS" "$SIGN_ALIAS" dist-personal/*.apk
+          cp dist-personal/*-arm64-v8a.apk dist-personal-arm64/
+          bash scripts/verify_built_apk.sh dist-personal/*.apk
+
+          BUILD_TOOLS_DIR="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          AAPT2="${BUILD_TOOLS_DIR}/aapt2"
+          APKSIGNER="${BUILD_TOOLS_DIR}/apksigner"
+
+          ARM64_APK="$(ls dist-personal/*-arm64-v8a.apk | head -n 1)"
+          BADGING="$("$AAPT2" dump badging "$ARM64_APK")"
+          PKG_NAME="$(echo "$BADGING" | grep -oP "^package: name='\K[^']+")"
+          APP_LABEL="$(echo "$BADGING" | grep -oP "^application-label:'\K[^']+")"
+          if [[ "$PKG_NAME" != "org.microg.android.gms" ]]; then
+            echo "::error title=Wrong Personal Package Name::Expected org.microg.android.gms, got $PKG_NAME"
+            exit 1
+          fi
+          PERMS="$("$AAPT2" dump permissions "$ARM64_APK")"
+          if echo "$PERMS" | grep -Eq "package: com\.google\.|name='com\.google\.|name='app\.revanced\."; then
+            echo "::error title=Play Store or MicroG-RE Permission Leak::$(echo "$PERMS" | grep -E 'com\.google\.|app\.revanced\.')"
+            exit 1
+          fi
+
+          ISOLATED_LINES="$(grep 'ISOLATE_MANIFEST' "$RUNNER_TEMP/gradle-personal.log" | sort -u | tr '\n' '; ' || true)"
+          if [[ -n "$ISOLATED_LINES" ]]; then
+            echo "::notice title=Isolated AAR Collisions (${{ matrix.target }})::${ISOLATED_LINES}"
+          else
+            echo "::notice title=Isolated AAR Collisions (${{ matrix.target }})::Zero non-prefixed AAR permissions/providers found"
+          fi
+
+          CERT_SHA256="$("$APKSIGNER" verify --print-certs "$ARM64_APK" | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
+          (cd dist-personal && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          (cd dist-personal-arm64 && sha256sum *.apk > SHA256SUMS.txt)
+          SUMMARY="Pkg=${PKG_NAME} Label='${APP_LABEL}' | $(cd dist-personal && ls -lh *.apk | awk '{print $9 "(" $5 ")"}' | tr '\n' ' ') | CertSHA256=${CERT_SHA256} | SHA256: $(tr '\n' '; ' < dist-personal/SHA256SUMS.txt)"
+          echo "::notice title=Personal Non-Play-Store ${{ matrix.target }} APKs Verified::${SUMMARY}"
+
+      - name: "Upload MicroG Personal ARM64 (${{ matrix.target }})"
+        uses: actions/upload-artifact@v7
+        with:
+          name: MicroG-Personal-arm64-v8a-${{ matrix.target }}
+          path: dist-personal-arm64/*
+          if-no-files-found: error
+
+      - name: "Upload MicroG Personal All Variants (${{ matrix.target }})"
+        uses: actions/upload-artifact@v7
+        with:
+          name: MicroG-Personal-All-Variants-${{ matrix.target }}
+          path: dist-personal/*
+          if-no-files-found: error
+
+  verify-side-by-side-isolation:
+    name: "Verify 0 Manifest Collisions Across MicroG-RE, Personal & Huawei APKs"
+    needs: [build, build-personal, build-huawei]
+    if: >-
+      (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'arena/')) &&
+      (inputs.edition == '' || inputs.edition == 'all')
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+
+      - name: "Download MicroG-RE ARM64 Release APK"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-RE-arm64-v8a-Release
+          path: check-apks/re
+
+      - name: "Download MicroG-Personal ARM64 Release APK"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-Personal-arm64-v8a-Release
+          path: check-apks/personal
+
+      - name: "Download MicroG-Original-HW ARM64 Release APK"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-Original-Huawei-arm64-v8a-Release
+          path: check-apks/hw
+
+      - name: "Verify Side-By-Side APK Manifest Isolation via aapt2 xmltree"
+        run: |
+          RE_APK="$(ls check-apks/re/microg-*-icon-arm64-v8a.apk | head -n 1)"
+          PERSONAL_APK="$(ls check-apks/personal/org.microg.android.gms-*-personal-arm64-v8a.apk | head -n 1)"
+          HW_APK="$(ls check-apks/hw/com.google.android.gms-*-hw-arm64-v8a.apk | head -n 1)"
+
+          if ! OUT="$(python3 scripts/verify_side_by_side_isolation.py "$RE_APK" "$PERSONAL_APK" "$HW_APK" 2>&1)"; then
+            echo "$OUT"
+            FLAT="$(echo "$OUT" | tr '\n' ' ')"
+            echo "::error title=Side-By-Side APK Collision Detected::${FLAT}"
+            exit 1
+          fi
+          echo "$OUT"
+          FLAT="$(echo "$OUT" | tr '\n' ' ')"
+          echo "::notice title=Side-By-Side APK Isolation Verified::${FLAT}"
+
+  publish-tag-microg-personal:
+    name: "[Tag: microg-personal-v*] Publish Git Tag & Release"
+    needs: [build-personal]
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (inputs.edition == '' || inputs.edition == 'all' || inputs.edition == 'microg-personal')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: "Download MicroG Personal Release APKs"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-Personal-All-Variants-Release
+          path: release-personal/rel
+
+      - name: "Download MicroG Personal Debug APKs"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-Personal-All-Variants-Debug
+          path: release-personal/dbg
+
+      - name: "Create/Update Dedicated MicroG Personal Tag & GitHub Release"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-personal/out
+          cp release-personal/rel/*.apk release-personal/dbg/*.apk release-personal/out/
+          (cd release-personal/out && sha256sum *.apk > SHA256SUMS-microg-personal.txt && cat SHA256SUMS-microg-personal.txt)
+
+          VER="$(grep -oP 'def origGmsVersionName = "\K[^"]+' build.gradle)"
+          TAG_NAME="microg-personal-v${VER}"
+          TITLE="[MicroG-Personal] v${VER}-personal — Standalone Personal Use (Not For Play Store / Huawei Nova 4e MAR-AL00 Ready) [Debug & Release]"
+          NOTES="## [MicroG-Personal] v${VER}-personal (\`org.microg.android.gms\`) — Personal Use Only (Not For Play Store)
+          - **Dedicated Git Tag**: \`${TAG_NAME}\` (Logcat debug filter: \`adb logcat | grep 'MicroG-Personal:'\`)
+          - **Why this installs cleanly on Huawei Nova 4e (\`MAR-AL00\`, HarmonyOS 3.0.0) & all phones**:
+            1. **100% Independent from Play Store**: Uses standalone package \`org.microg.android.gms\` (zero collision with factory \`com.google.android.gms\` / \`com.google.android.gsf\` in \`/system\`, and all Play Store \`vending_*\` services disabled).
+            2. **100% Independent from MicroG-RE**: Separate package, permissions, providers, Emerald-Teal launcher icon, and label (\`microG Personal\`).
+            3. **Explicitly Self-Signed (v1 + v2 + v3, v4 disabled)**: 4-byte page-aligned + RSA 4096-bit (\`SHA256withRSA\`) personal self-signed certificate; zero malware/sensitive permissions.
+          - **Recommended Single APK for Huawei Nova 4e (\`MAR-AL00\`) & 64-bit phones**:
+            - \`org.microg.android.gms-255070302-personal-arm64-v8a.apk\`"
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            git tag -f "$TAG_NAME" "$GITHUB_SHA"
+            git push -f origin "refs/tags/$TAG_NAME"
+            gh release edit "$TAG_NAME" --title "$TITLE" --notes "$NOTES" --prerelease=false
+            gh release upload "$TAG_NAME" release-personal/out/*.apk release-personal/out/SHA256SUMS-microg-personal.txt --clobber
+          else
+            gh release create "$TAG_NAME" release-personal/out/*.apk release-personal/out/SHA256SUMS-microg-personal.txt \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --notes "$NOTES"
+          fi
+          echo "::notice title=Published MicroG-Personal Tag::Tag=${TAG_NAME} -> https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"

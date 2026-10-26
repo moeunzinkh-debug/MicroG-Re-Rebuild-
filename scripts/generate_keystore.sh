@@ -28,7 +28,7 @@ if [[ ! -f "$RELEASE_STORE" ]]; then
     -validity 10000 \
     -storepass "$RELEASE_PASS" \
     -keypass "$RELEASE_PASS" \
-    -dname "CN=MicroG RE Release, OU=Mobile Engineering, O=MicroG RE Rebuild, L=Phnom Penh, ST=Phnom Penh, C=KH"
+    -dname "CN=MicroG Personal Self-Signed Release, OU=Personal Sideload Not For Play Store, O=Personal Use Only, L=Phnom Penh, ST=Phnom Penh, C=KH"
   echo "Created release keystore: $RELEASE_STORE"
 else
   echo "Release keystore already exists: $RELEASE_STORE"
@@ -46,7 +46,7 @@ if [[ ! -f "$DEBUG_STORE" ]]; then
     -validity 10000 \
     -storepass "$DEBUG_PASS" \
     -keypass "$DEBUG_PASS" \
-    -dname "CN=MicroG RE Dev Build, OU=Mobile Engineering, O=MicroG RE Rebuild, L=Phnom Penh, ST=Phnom Penh, C=KH"
+    -dname "CN=MicroG Personal Self-Signed Debug, OU=Personal Sideload Not For Play Store, O=Personal Use Only, L=Phnom Penh, ST=Phnom Penh, C=KH"
   echo "Created debug keystore: $DEBUG_STORE"
 else
   echo "Debug keystore already exists: $DEBUG_STORE"

@@ -1,13 +1,16 @@
-# MicroG-RE `7.3.0-dev.2` & Original microG Huawei (`-hw`) — ការ Build APK (Debug & Release) និងការការពារបញ្ហា Malware (ភាសាខ្មែរ)
+# MicroG Personal (Non-Play-Store), MicroG-RE `7.3.0-dev.2` & Original microG Huawei (`-hw`) — ឯកសារណែនាំជាភាសាខ្មែរ
 
-Repository នេះបង្កើត APK ចំនួន **២ ប្រព័ន្ធ (២ Editions)** ទាំង **Release APK** និង **Debug APK** ដោយស្វ័យប្រវត្តិ និងគ្មានបញ្ហាព្រមាន Malware ពេលដំឡើង៖
+Repository នេះបង្កើត APK ចំនួន **៣ ប្រព័ន្ធ (៣ Editions ដាច់ដោយឡែកពីគ្នាទាំងស្រុង៖ Tag ខុសគ្នា, Package ខុសគ្នា, និងពណ៌ Icon ខុសគ្នា)** ទាំង **Release APK** និង **Debug APK** និងគ្មានបញ្ហាព្រមាន Malware ពេលដំឡើង៖
 
-1. **Original microG — Huawei Edition (`-hw`)** (`com.google.android.gms` + `com.android.vending` Companion)
-   - សម្រាប់ទូរស័ព្ទ **Huawei គ្រប់ម៉ូដែលទាំងអស់** រួមទាំង **Huawei Nova 4e (`MAR-AL00`, Kirin 710, HarmonyOS 3.0.0)**, Nova 2/3/5/7/8/9/10/11/12/13, P20/P30/P40/P50/P60/Pura 70/80, Mate 10/20/30/40/50/60/70, MatePad និង Honor (ទាំង **HarmonyOS 2.0 / 3.0.0 / 3.1 / 4.0 / 4.2 / 4.3** និង **EMUI 8–15** ពី Android 5.0 API 21 ឡើងទៅ)។
+1. 🟢 **`microG Personal` (`-personal` — សម្រាប់ប្រើផ្ទាល់ខ្លួន មិនសម្រាប់ដាក់លើ Play Store)** (`org.microg.android.gms`, Tag: `microg-personal-v0.3.17.255070`, **Icon ពណ៌បៃតងត្បូងមរកត**)
+   - **ដោះស្រាយដាច់ខាត ១០០% នូវបញ្ហា `Package signature does not match the installed app` នៅលើ Huawei Nova 4e (`MAR-AL00`, HarmonyOS 3.0.0)** និងទូរស័ព្ទគ្រប់ម៉ូដែលដែលមានសេវា Google/Play Store បង្កប់ក្នុង `/system` ស្រាប់!
+   - ផ្ដាច់ខ្លួនចេញពី Play Store ទាំងស្រុង (`vending_* = false` និងប្រើកញ្ចប់ឯករាជ្យ `org.microg.android.gms`) ព្រមទាំងចុះហត្ថលេខាផ្ទាល់ខ្លួន (Self-Signed RSA 4096-bit `v1 + v2 + v3`, បិទ `v4`) សម្រាប់ដំឡើងប្រើផ្ទាល់ខ្លួនតាម Browser ដោយគ្រាន់តែដំឡើង **១ ឯកសារគត់** (`org.microg.android.gms-255070302-personal-arm64-v8a.apk`)។
+2. 🔵 **Original microG — Huawei Edition (`-hw`)** (`com.google.android.gms` + `com.android.vending`, Tag: `microg-original-hw-v0.3.17.255070`, **Icon ពណ៌ខៀវ**)
+   - សម្រាប់ទូរស័ព្ទ Huawei ស៊េរីក្រោយឆ្នាំ ២០១៩ ដែល **គ្មានសេវា Google ក្នុង `/system` សោះ** (ឧ. Nova 7/8/9/10/11/12/13, P40/P50/P60/Pura 70, Mate 30/40/50/60)។
    - រួមបញ្ចូល `com.huawei.signature.diff.SignatureService` សម្រាប់ Huawei Signature Spoofing, ផែនទី Huawei HMS Maps + MapLibre/VTM, ប៊ូតុង **"Huawei"** ពេលចូលគណនី Google និងការកែបញ្ហាចូលគណនី Aurora Store / VPN។
-2. **MicroG-RE `7.3.0-dev.2`** (`app.revanced.android.gms`)
+3. 🔴 **MicroG-RE `7.3.0-dev.2`** (`app.revanced.android.gms`, Tag: `microg-re-v7.3.0-dev.2`, **Icon ពណ៌ក្រហម**)
    - សម្រាប់កម្មវិធីដែលបាន Patch រួច (YouTube ReVanced / Morphe, YT Music, Reddit, TikTok, Google Photos ។ល។) លើទូរស័ព្ទគ្រប់ម៉ាក រួមទាំង Huawei Nova 4e (`MAR-AL00`) ផងដែរ។
-   - **អាចដំឡើងទន្ទឹមគ្នា (Side-by-Side)** ជាមួយ Original microG Huawei នៅលើទូរស័ព្ទ Huawei តែមួយបាន 100% ដោយមិនជាន់ឈ្មោះកញ្ចប់កម្មវិធី (`Package Name`) គ្នាឡើយ!
+   - **អាចដំឡើងទន្ទឹមគ្នាទាំង ៣ (Side-by-Side)** ដោយមិនជាន់ឈ្មោះកញ្ចប់ (`Package Name`), សិទ្ធិ (`<permission>`), Content Provider (`<provider android:authorities>`) ឬរូបតំណាងកម្មវិធីគ្នាឡើយ (សូម្បីតែជាមួយ ReVanced GmsCore / MicroG-RE កំណែចាស់ក៏អាចដំឡើងទន្ទឹមគ្នាជាមួយ `microG Personal` បានដែរ ព្រោះបានផ្ដាច់ `org.microg.gms.maps.vtm.tile` និង `org.microg.gms.{STATUS_BROADCAST,EXTENDED_ACCESS,PROVISION}` ទៅជា `${basePackageName}.android.gms.*` និងមាន `IsolateManifestTask` ការពារ ១០០%)!
 
 ---
 

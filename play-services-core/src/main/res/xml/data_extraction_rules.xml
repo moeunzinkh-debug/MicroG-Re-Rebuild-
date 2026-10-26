@@ -3,6 +3,7 @@
     <cloud-backup>
         <include domain="sharedpref" path="app.revanced.android.gms_preferences.xml" />
         <include domain="sharedpref" path="com.google.android.gms_preferences.xml" />
+        <include domain="sharedpref" path="org.microg.android.gms_preferences.xml" />
         <include domain="sharedpref" path="checkin.xml" />
         <include domain="sharedpref" path="unified_nlp.xml" />
         <include domain="file" path="accounts_backup.json" />
@@ -10,6 +11,7 @@
     <device-transfer>
         <include domain="sharedpref" path="app.revanced.android.gms_preferences.xml" />
         <include domain="sharedpref" path="com.google.android.gms_preferences.xml" />
+        <include domain="sharedpref" path="org.microg.android.gms_preferences.xml" />
         <include domain="sharedpref" path="checkin.xml" />
         <include domain="sharedpref" path="unified_nlp.xml" />
         <include domain="file" path="accounts_backup.json" />

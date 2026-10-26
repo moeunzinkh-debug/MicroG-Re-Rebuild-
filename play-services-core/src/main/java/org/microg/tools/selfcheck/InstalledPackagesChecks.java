@@ -45,10 +45,16 @@ public class InstalledPackagesChecks implements SelfCheckGroup {
 
     @Override
     public void doChecks(Context context, ResultCollector collector) {
+        String basePkg = com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME;
+        if ("org.microg".equals(basePkg)) {
+            // Personal standalone non-Play-Store build: verify only our standalone GMS package is installed
+            addPackageInstalledResult(context, collector, context.getString(R.string.self_check_pkg_gms), Constants.GMS_PACKAGE_NAME);
+            return;
+        }
         addPackageInstalledAndSignedResult(context, collector, context.getString(R.string.self_check_pkg_gms), Constants.GMS_PACKAGE_NAME, Constants.GMS_PACKAGE_SIGNATURE_SHA1);
         addPackageInstalledAndSignedResult(context, collector, context.getString(R.string.self_check_pkg_vending), Constants.VENDING_PACKAGE_NAME, Constants.GMS_PACKAGE_SIGNATURE_SHA1);
         addPackageInstalledResult(context, collector, context.getString(R.string.self_check_pkg_gsf), Constants.GSF_PACKAGE_NAME);
-        if (!"com.google".equals(com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME)) {
+        if ("app.revanced".equals(basePkg)) {
             // Re-signed Google app forks (MicroG-RE parity)
             checkInstalledPackage(context, collector, context.getString(R.string.about_morphe), ".morphe.android");
             // Other patchers are informational only: whether apps for them are installed or not

@@ -3,6 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import com.android.build.api.artifact.SingleArtifact
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.transform.OutputKeys
+import javax.xml.transform.TransformerFactory
+import javax.xml.transform.dom.DOMSource
+import javax.xml.transform.stream.StreamResult
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.TaskAction
+import org.w3c.dom.Element
+
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
@@ -276,13 +291,24 @@ android {
             buildConfigField "String", "EDITION_TAG", "\"MicroG-Original-HW\""
             buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-original-hw-v\""
         }
+        "personal" {
+            dimension 'target'
+            versionNameSuffix "-personal"
+            matchingFallbacks = ['default']
+            buildConfigField "String", "EDITION_TAG", "\"MicroG-Personal\""
+            buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-personal-v\""
+        }
         "user" {
             dimension 'target'
             applicationId = "org.microg.gms"
             versionNameSuffix "-user"
             buildConfigField "String", "EDITION_TAG", "\"MicroG-User\""
             buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-user-v\""
-            manifestPlaceholders = [appLabel:"@string/limited_services_app_name", basePackageName:"org.microg"]
+            manifestPlaceholders = [
+                    appLabel           : "@string/limited_services_app_name",
+                    basePackageName    : "org.microg",
+                    launcherIconEnabled: (project.findProperty("noIcon") == "true") ? "false" : "true"
+            ]
             matchingFallbacks = ['default']
             resValue "string", "package_id", "org.microg.gms"
             // Account type must match AuthConstants.DEFAULT_ACCOUNT_TYPE, which is compiled
@@ -322,5 +348,144 @@ android.applicationVariants.all { variant ->
     def buildSuffix = variant.name.toLowerCase().endsWith("debug") ? "-debug" : (hasReleaseKeystore ? "" : "-unsigned")
     variant.outputs.each { output ->
         output.outputFileName = variant.applicationId + "-" + variant.versionCode + variant.versionName.substring(version.length()) + buildSuffix + ".apk"
+    }
+}
+
+abstract class IsolateManifestTask extends DefaultTask {
+    @Input
+    abstract Property<String> getApplicationId()
+
+    @InputFile
+    abstract RegularFileProperty getMergedManifest()
+
+    @OutputFile
+    abstract RegularFileProperty getUpdatedManifest()
+
+    @TaskAction
+    void taskAction() {
+        String androidNs = "http://schemas.android.com/apk/res/android"
+        String appId = applicationId.get()
+        String basePkg = appId.endsWith(".android.gms")
+                ? appId.substring(0, appId.length() - ".android.gms".length())
+                : appId
+        def isOwned = { String id ->
+            id == appId ||
+            id.startsWith(appId + ".") ||
+            id.startsWith(basePkg + ".android.") ||
+            id.startsWith(basePkg + ".firebase.") ||
+            id == (basePkg + ".settings") ||
+            id.startsWith("android.permission-group.")
+        }
+
+        def dbf = DocumentBuilderFactory.newInstance()
+        dbf.setNamespaceAware(true)
+        def doc = dbf.newDocumentBuilder().parse(mergedManifest.get().asFile)
+        Element root = doc.documentElement
+        String nsPrefix = root.lookupPrefix(androidNs) ?: "android"
+
+        String sharedUid = root.getAttributeNS(androidNs, "sharedUserId")
+        if (sharedUid) {
+            logger.lifecycle("ISOLATE_MANIFEST [{}]: Removing sharedUserId='{}'", appId, sharedUid)
+            root.removeAttributeNS(androidNs, "sharedUserId")
+        }
+
+        int totalPerms = 0
+        Map<String, String> renamedPerms = [:]
+        ["permission", "permission-tree", "permission-group"].each { String tagName ->
+            def nodes = root.getElementsByTagName(tagName)
+            totalPerms += nodes.length
+            for (int i = 0; i < nodes.length; i++) {
+                Element el = (Element) nodes.item(i)
+                String name = el.getAttributeNS(androidNs, "name")
+                if (name && !isOwned(name)) {
+                    String newName = "${appId}.${name}"
+                    renamedPerms[name] = newName
+                    el.setAttributeNS(androidNs, "${nsPrefix}:name", newName)
+                    logger.lifecycle("ISOLATE_MANIFEST [{}]: Rewrote <{}> '{}' -> '{}'", appId, tagName, name, newName)
+                }
+            }
+        }
+
+        if (!renamedPerms.isEmpty()) {
+            def allNodes = root.getElementsByTagName("*")
+            for (int i = 0; i < allNodes.length; i++) {
+                Element el = (Element) allNodes.item(i)
+                ["permission", "readPermission", "writePermission", "permissionGroup"].each { String attr ->
+                    String val = el.getAttributeNS(androidNs, attr)
+                    if (renamedPerms.containsKey(val)) {
+                        el.setAttributeNS(androidNs, "${nsPrefix}:${attr}", renamedPerms[val])
+                    }
+                }
+            }
+            renamedPerms.values().each { String newPerm ->
+                Element up = doc.createElement("uses-permission")
+                up.setAttributeNS(androidNs, "${nsPrefix}:name", newPerm)
+                root.insertBefore(up, root.firstChild)
+            }
+        }
+
+        int rewrittenAuthCount = 0
+        def providers = root.getElementsByTagName("provider")
+        for (int i = 0; i < providers.length; i++) {
+            Element prov = (Element) providers.item(i)
+            String auths = prov.getAttributeNS(androidNs, "authorities")
+            if (auths) {
+                String updatedAuths = auths.split(";").collect { String a ->
+                    String trimmed = a.trim()
+                    if (trimmed && !isOwned(trimmed)) {
+                        String newAuth = "${appId}.${trimmed}"
+                        rewrittenAuthCount++
+                        logger.lifecycle("ISOLATE_MANIFEST [{}]: Rewrote <provider> authority '{}' -> '{}'", appId, trimmed, newAuth)
+                        return newAuth
+                    }
+                    return trimmed
+                }.join(";")
+                if (updatedAuths != auths) {
+                    prov.setAttributeNS(androidNs, "${nsPrefix}:authorities", updatedAuths)
+                }
+            }
+        }
+
+        ["library", "static-library"].each { String libTag ->
+            def libs = root.getElementsByTagName(libTag)
+            for (int i = 0; i < libs.length; i++) {
+                Element lib = (Element) libs.item(i)
+                String lName = lib.getAttributeNS(androidNs, "name")
+                if (lName && !isOwned(lName)) {
+                    String newLib = "${appId}.${lName}"
+                    lib.setAttributeNS(androidNs, "${nsPrefix}:name", newLib)
+                    logger.lifecycle("ISOLATE_MANIFEST [{}]: Rewrote <{}> '{}' -> '{}'", appId, libTag, lName, newLib)
+                }
+            }
+        }
+
+        logger.lifecycle(
+            "ISOLATE_MANIFEST_SUMMARY [{}]: totalPerms={} totalProviders={} rewrotePerms={} rewroteProviders={}",
+            appId, totalPerms, providers.length, renamedPerms.size(), rewrittenAuthCount
+        )
+
+        def tf = TransformerFactory.newInstance().newTransformer()
+        tf.setOutputProperty(OutputKeys.INDENT, "yes")
+        tf.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
+        def outFile = updatedManifest.get().asFile
+        outFile.parentFile.mkdirs()
+        outFile.withOutputStream { os ->
+            tf.transform(new DOMSource(doc), new StreamResult(os))
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        String capName = variant.name.substring(0, 1).toUpperCase() + variant.name.substring(1)
+        def isolateTask = tasks.register("isolate${capName}MergedManifest", IsolateManifestTask) { task ->
+            task.applicationId.set(variant.applicationId)
+        }
+        variant.artifacts.use(isolateTask)
+            .wiredWithFiles(
+                { task -> task.mergedManifest },
+                { task -> task.updatedManifest }
+            )
+            .toTransform(SingleArtifact.MERGED_MANIFEST.INSTANCE)
     }
 }
