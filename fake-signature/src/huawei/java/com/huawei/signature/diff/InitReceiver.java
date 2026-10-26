@@ -15,7 +15,7 @@ import android.util.Log;
  * This is to make sure the process is initialized at boot.
  */
 public class InitReceiver extends BroadcastReceiver {
-    private static final String TAG = "InitReceiver";
+    private static final String TAG = "MicroG-Orig:HwBoot";
 
     @SuppressLint("UnsafeProtectedBroadcastReceiver")
     @Override

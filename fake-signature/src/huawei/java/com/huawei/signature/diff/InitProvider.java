@@ -16,7 +16,7 @@ import android.util.Log;
 import java.util.List;
 
 public class InitProvider extends ContentProvider {
-    private static final String TAG = "InitProvider";
+    private static final String TAG = "MicroG-Orig:HwInit";
 
     @Override
     public boolean onCreate() {

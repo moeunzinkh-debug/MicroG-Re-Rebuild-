@@ -18,7 +18,6 @@ package org.microg.gms.ui.updater
 
 import android.Manifest
 import android.app.Activity
-import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -27,11 +26,9 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
-import android.provider.Settings
 import android.text.method.LinkMovementMethod
 import android.util.Log
 import android.widget.ProgressBar
@@ -39,7 +36,6 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.core.text.HtmlCompat
 import com.google.android.gms.BuildConfig
@@ -51,7 +47,6 @@ import com.google.gson.JsonObject
 import org.microg.gms.ui.MainSettingsActivity
 import org.microg.gms.ui.updater.AppUpdater.UPDATE_COOLDOWN_MS
 import java.io.File
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.ZipFile
@@ -60,23 +55,26 @@ import java.util.zip.ZipFile
  * In-app updater for MicroG-RE.
  *
  * Checks GitHub for the latest release, prompts the user on launch (or via a notification
- * when running in the background), and can download and install the new APK through the
- * system package installer.
+ * when running in the background), and opens the release download in the system browser so
+ * REQUEST_INSTALL_PACKAGES is not required.
  */
 object AppUpdater {
 
     /** Intent extra used by the update notification to force the update prompt. */
     const val EXTRA_CHECK_UPDATE = "extra_check_update"
 
+    private const val PRIMARY_RELEASES_URL = "https://api.github.com/repos/moeunzinkh-debug/MicroG-Re-Rebuild-/releases"
+    private const val PRIMARY_WEB_RELEASES_URL = "https://github.com/moeunzinkh-debug/MicroG-Re-Rebuild-/releases"
     private const val RELEASES_URL = "https://api.github.com/repos/MorpheApp/MicroG-RE/releases"
     private const val UPDATE_URL = "$RELEASES_URL/latest"
+    private const val WEB_RELEASES_URL = "https://github.com/MorpheApp/MicroG-RE/releases"
+    private val isOriginalMicrog: Boolean
+        get() = BuildConfig.BASE_PACKAGE_NAME == "com.google"
     private const val PREFS_NAME = "org.microg.gms_updater"
     private const val PREFS_IGNORED_VERSION = "ignored_version"
     private const val PREFS_LAST_CHECK = "last_check"
     private const val PREFS_NOTIF_ASKED = "notif_permission_asked"
 
-    private var pendingAction: ((Activity) -> Unit)? = null
-    private var isLifecycleRegistered = false
     private var isAbiWarningShowing = false
     private var isUpdateDialogShowing = false
     private var isDownloadInProgress = false
@@ -87,11 +85,10 @@ object AppUpdater {
     private const val NOTIFICATION_ID = 0x5555
     private const val REQUEST_NOTIFICATION_PERMISSION = 0x5556
     private const val MAX_NOTES_LENGTH = 8000
-    private const val DOWNLOAD_DIR = "updater"
-    private const val DOWNLOAD_FILE = "microg-re-update.apk"
     private const val USER_AGENT = "MicroG-RE-Updater"
     private const val TIMEOUT_MS = 15000
-    private const val TAG = "AppUpdater"
+    private val TAG: String
+        get() = if (isOriginalMicrog) "MicroG-Orig:Updater" else "MicroG-RE:Updater"
 
     /** Automatic checks run at most once every [UPDATE_COOLDOWN_MS]; manual checks always run. */
     private const val UPDATE_COOLDOWN_MS = 24 * 60 * 60 * 1000L
@@ -133,67 +130,22 @@ object AppUpdater {
         check(activity, force = true, manual = true)
     }
 
-    /** Downloads [update] and hands the APK to the system installer. */
+    /** Opens [update] download URL in the system browser (no REQUEST_INSTALL_PACKAGES needed). */
     @JvmStatic
     fun runUpdateFlow(activity: Activity, update: UpdateInfo?) {
-        val url = update?.assetUrl ?: run {
-            toast(activity, R.string.update_download_failed)
-            return
-        }
-        if (!ensureInstallPermission(activity) { runUpdateFlow(it, update) }) return
+        val fallback = if (isOriginalMicrog) PRIMARY_WEB_RELEASES_URL else WEB_RELEASES_URL
+        val url = update?.assetUrl?.takeIf { it.isNotEmpty() } ?: fallback
         ensureUpdateNotificationPermission(activity)
-
-        isDownloadInProgress = true
-        var isCancelled = false
-        var activeConnection: HttpURLConnection? = null
-
-        val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = true
-            val padding = (16 * activity.resources.displayMetrics.density).toInt()
-            setPadding(padding, padding, padding, padding)
-        }
-        val dialog = MaterialAlertDialogBuilder(activity)
-            .setTitle(R.string.update_downloading_title)
-            .setCancelable(false)
-            .setView(progress)
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
-                isCancelled = true
-                isDownloadInProgress = false
-                Thread {
-                    try { activeConnection?.disconnect() } catch (_: Exception) {}
-                }.start()
-            }
-            .create()
-        dialog.show()
-
-        Thread {
-            val file = downloadUrlCancellable(url, File(activity.cacheDir, "$DOWNLOAD_DIR/$DOWNLOAD_FILE"), { isCancelled }) { conn ->
-                activeConnection = conn
-            }
-            runOnUiThread(activity) {
-                dialog.dismiss()
-                isDownloadInProgress = false
-                if (isCancelled) return@runOnUiThread
-                if (file == null) {
-                    Log.e(TAG, "Update download failed: $url")
-                    showErrorDialog(activity, activity.getString(R.string.update_download_failed))
-                } else {
-                    Log.i(TAG, "Update downloaded: ${file.length()} bytes -> ${file.absolutePath}")
-                    launchInstaller(activity, file)
-                }
-            }
-        }.start()
+        openDownloadInBrowser(activity, url)
     }
 
-    /** Downloads the 'noicon' build variant and prompts the user to update the app. */
+    /** Resolves the 'noicon' build variant URL and opens it in the system browser. */
     @JvmStatic
     fun downloadAndInstallNoIconVariant(activity: Activity) {
-        if (!ensureInstallPermission(activity) { downloadAndInstallNoIconVariant(it) }) return
         ensureUpdateNotificationPermission(activity)
 
         isDownloadInProgress = true
         var isCancelled = false
-        var activeConnection: HttpURLConnection? = null
 
         val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
@@ -208,24 +160,15 @@ object AppUpdater {
             .setNegativeButton(android.R.string.cancel) { _, _ ->
                 isCancelled = true
                 isDownloadInProgress = false
-                Thread {
-                    try { activeConnection?.disconnect() } catch (_: Exception) {}
-                }.start()
             }
             .setOnCancelListener {
                 isCancelled = true
                 isDownloadInProgress = false
-                Thread {
-                    try { activeConnection?.disconnect() } catch (_: Exception) {}
-                }.start()
             }
             .create()
         dialog.show()
 
         Thread {
-            val candidateUrls = mutableListOf<String>()
-
-            // 1. Query GitHub API for release assets
             val update = fetchLatestUpdate(
                 noiconVariant = true,
                 includePrerelease = includePrerelease(activity),
@@ -236,47 +179,23 @@ object AppUpdater {
                 return@Thread
             }
 
-            if (update?.assetUrl?.isNotEmpty() == true && update.assetName.lowercase().contains("noicon")) {
-                candidateUrls.add(update.assetUrl)
-            }
-
-            // 2. Direct GitHub release asset URL fallback
             val cleanVersion = BuildConfig.VERSION_NAME.trim().removePrefix("v").removePrefix("V")
-            val tag = "v$cleanVersion"
+                .substringBefore(" ").substringBefore("(")
             val isArm64 = Build.SUPPORTED_ABIS.any { it == "arm64-v8a" }
             val assetFileName = if (isArm64) "microg-$cleanVersion-noicon-arm64-v8a.apk" else "microg-$cleanVersion-noicon.apk"
+            val fallbackUrl = "https://github.com/MorpheApp/MicroG-RE/releases/download/$cleanVersion/$assetFileName"
 
-            val directUrlTag = "https://github.com/MorpheApp/MicroG-RE/releases/download/$tag/$assetFileName"
-            val directUrlLatest = "https://github.com/MorpheApp/MicroG-RE/releases/latest/download/$assetFileName"
-
-            if (!candidateUrls.contains(directUrlTag)) candidateUrls.add(directUrlTag)
-            if (!candidateUrls.contains(directUrlLatest)) candidateUrls.add(directUrlLatest)
-
-            val targetFile = File(activity.cacheDir, "$DOWNLOAD_DIR/microg-re-noicon-update.apk")
-            var downloadedFile: File? = null
-
-            for (url in candidateUrls) {
-                if (isCancelled) break
-                Log.i(TAG, "Attempting to download no-icon variant from: $url")
-                val file = downloadUrlCancellable(url, targetFile, { isCancelled }) { conn ->
-                    activeConnection = conn
-                }
-                if (file != null && file.length() > 0L) {
-                    downloadedFile = file
-                    break
-                }
+            val resolvedUrl = if (update?.assetUrl?.isNotEmpty() == true && update.assetName.lowercase().contains("noicon")) {
+                update.assetUrl
+            } else {
+                fallbackUrl
             }
 
             runOnUiThread(activity) {
                 dialog.dismiss()
                 isDownloadInProgress = false
-                if (isCancelled) return@runOnUiThread
-                if (downloadedFile == null) {
-                    Log.e(TAG, "No-icon variant download failed for all candidate URLs")
-                    showErrorDialog(activity, activity.getString(R.string.update_download_failed))
-                } else {
-                    Log.i(TAG, "No-icon variant downloaded: ${downloadedFile.length()} bytes -> ${downloadedFile.absolutePath}")
-                    launchInstaller(activity, downloadedFile)
+                if (!isCancelled) {
+                    openDownloadInBrowser(activity, resolvedUrl)
                 }
             }
         }.start()
@@ -585,195 +504,23 @@ object AppUpdater {
             .show()
     }
 
-    private fun ensureInstallPermission(activity: Activity, action: (Activity) -> Unit): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
-            pendingAction = action
-            ensureLifecycleCallbacks(activity)
-            MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.update_permission_required_title)
-                .setMessage(R.string.update_permission_required_message)
-                .setPositiveButton(R.string.update_open_settings) { _, _ ->
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        "package:${activity.packageName}".toUri()
-                    )
-                    activity.startActivity(intent)
-                }
-                .setNegativeButton(android.R.string.cancel) { _, _ ->
-                    pendingAction = null
-                }
-                .show()
-            return false
-        }
-        return true
-    }
-
-    private fun ensureLifecycleCallbacks(context: Context) {
-        if (isLifecycleRegistered) return
-        val app = context.applicationContext as? Application ?: return
-        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityResumed(activity: Activity) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && activity.packageManager.canRequestPackageInstalls()) {
-                    val action = pendingAction ?: return
-                    pendingAction = null
-                    action(activity)
-                }
-            }
-            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-            override fun onActivityStarted(activity: Activity) {}
-            override fun onActivityPaused(activity: Activity) {}
-            override fun onActivityStopped(activity: Activity) {}
-            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
-            override fun onActivityDestroyed(activity: Activity) {}
-        })
-        isLifecycleRegistered = true
-    }
-
-    private fun launchInstaller(context: Context, file: File) {
-        if (!checkSignaturesMatch(context, file)) {
-            Log.e(TAG, "Signature mismatch between installed app and downloaded APK")
-            showErrorDialog(context, context.getString(R.string.update_signature_mismatch))
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
-            if (context is Activity) {
-                ensureInstallPermission(context) { launchInstaller(it, file) }
-            } else {
-                showErrorDialog(context, context.getString(R.string.update_download_failed))
-            }
-            return
-        }
-
+    private fun openDownloadInBrowser(activity: Activity, url: String) {
         try {
-            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
-            val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, "application/vnd.android.package-archive")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            Log.i(TAG, "Launching installer for $uri")
-            context.startActivity(intent)
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Log.i(TAG, "Opening download URL in browser: $url")
+            activity.startActivity(intent)
         } catch (e: Exception) {
-            Log.e(TAG, "Installer launch failed", e)
-            showErrorDialog(context, context.getString(R.string.update_download_failed))
+            Log.e(TAG, "Opening browser for update failed", e)
+            showErrorDialog(activity, activity.getString(R.string.update_download_failed))
         }
-    }
-
-    private fun checkSignaturesMatch(context: Context, apkFile: File): Boolean {
-        val pm = context.packageManager
-        val installedSignatures = getSignatures(pm, context.packageName, null)
-        val apkSignatures = getSignatures(pm, null, apkFile.absolutePath)
-
-        if (installedSignatures.isEmpty() || apkSignatures.isEmpty()) {
-            return true
-        }
-
-        return apkSignatures.any { apkSig ->
-            installedSignatures.any { installedSig ->
-                apkSig.toByteArray().contentEquals(installedSig.toByteArray())
-            }
-        }
-    }
-
-    private fun getSignatures(pm: PackageManager, packageName: String?, apkPath: String?): List<android.content.pm.Signature> {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val flags = PackageManager.GET_SIGNING_CERTIFICATES
-            val pkgInfo = if (apkPath != null) {
-                pm.getPackageArchiveInfo(apkPath, flags)
-            } else if (packageName != null) {
-                pm.getPackageInfo(packageName, flags)
-            } else null
-            val signingInfo = pkgInfo?.signingInfo
-            return when {
-                signingInfo == null -> emptyList()
-                signingInfo.hasMultipleSigners() -> signingInfo.apkContentsSigners.toList()
-                else -> signingInfo.signingCertificateHistory.toList()
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            val flags = PackageManager.GET_SIGNATURES
-            val pkgInfo = if (apkPath != null) {
-                pm.getPackageArchiveInfo(apkPath, flags)
-            } else if (packageName != null) {
-                pm.getPackageInfo(packageName, flags)
-            } else null
-            @Suppress("DEPRECATION")
-            return pkgInfo?.signatures?.toList() ?: emptyList()
-        }
-    }
-
-    private fun downloadUrlCancellable(
-        initialUrl: String,
-        target: File,
-        isCancelled: () -> Boolean,
-        onConnectionCreated: (HttpURLConnection) -> Unit
-    ): File? {
-        var currentUrl = initialUrl
-        var redirects = 0
-        val maxRedirects = 5
-
-        while (redirects < maxRedirects) {
-            if (isCancelled()) return null
-            try {
-                val conn = URL(currentUrl).openConnection() as HttpURLConnection
-                onConnectionCreated(conn)
-                conn.connectTimeout = TIMEOUT_MS
-                conn.readTimeout = 30000
-                conn.instanceFollowRedirects = true
-                conn.setRequestProperty("User-Agent", USER_AGENT)
-
-                val responseCode = conn.responseCode
-                if (responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
-                    responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
-                    responseCode == HttpURLConnection.HTTP_SEE_OTHER ||
-                    responseCode == 307 || responseCode == 308
-                ) {
-                    val loc = conn.getHeaderField("Location")
-                    conn.disconnect()
-                    if (loc.isNullOrEmpty()) return null
-                    currentUrl = loc
-                    redirects++
-                    continue
-                }
-
-                if (responseCode != HttpURLConnection.HTTP_OK) {
-                    conn.disconnect()
-                    return null
-                }
-
-                target.parentFile?.mkdirs()
-                val input = conn.inputStream
-                try {
-                    FileOutputStream(target).use { out ->
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            if (isCancelled()) {
-                                conn.disconnect()
-                                target.delete()
-                                return null
-                            }
-                            out.write(buffer, 0, bytesRead)
-                        }
-                    }
-                } finally {
-                    try { input.close() } catch (_: Exception) {}
-                    conn.disconnect()
-                }
-
-                return if (target.length() > 0L && !isCancelled()) target else null
-            } catch (e: Exception) {
-                target.delete()
-                return null
-            }
-        }
-        return null
     }
 
     /**
      * Fetches the newest releasable update from GitHub. Returns null on failure.
      *
-     * With [includePrerelease] the whole release list is scanned (so pre-release / dev
-     * builds are offered); otherwise only the latest stable release is considered.
+     * Checks the rebuild repository's releases first (so custom-signed updates match),
+     * then falls back to upstream MorpheApp/MicroG-RE releases.
      */
     @JvmStatic
     @JvmOverloads
@@ -782,14 +529,36 @@ object AppUpdater {
         includePrerelease: Boolean,
         strictVariantMatch: Boolean = false
     ): UpdateInfo? {
+        fetchLatestUpdateFromRepo(PRIMARY_RELEASES_URL, "$PRIMARY_RELEASES_URL/latest", noiconVariant, includePrerelease, strictVariantMatch)
+            ?.let { return it }
+        if (isOriginalMicrog) return null
+        return fetchLatestUpdateFromRepo(RELEASES_URL, UPDATE_URL, noiconVariant, includePrerelease, strictVariantMatch)
+    }
+
+    private fun matchesReleaseTag(rawTag: String): Boolean {
+        val lower = rawTag.trim().lowercase()
+        return if (isOriginalMicrog) {
+            lower.startsWith("microg-original-")
+        } else {
+            !lower.startsWith("microg-original-")
+        }
+    }
+
+    private fun fetchLatestUpdateFromRepo(
+        releasesUrl: String,
+        latestUrl: String,
+        noiconVariant: Boolean,
+        includePrerelease: Boolean,
+        strictVariantMatch: Boolean = false
+    ): UpdateInfo? {
         return try {
-            if (includePrerelease || strictVariantMatch) {
-                val text = httpGet("$RELEASES_URL?per_page=20") ?: return null
+            // Always scan the release list on multi-tag repositories so separate tags
+            // (microg-re-v* vs microg-original-hw-v*) resolve independently.
+            val useListScan = includePrerelease || strictVariantMatch || releasesUrl == PRIMARY_RELEASES_URL
+            if (useListScan) {
+                val text = httpGet("$releasesUrl?per_page=25") ?: return null
                 val all = Gson().fromJson(text, JsonArray::class.java) ?: return null
                 all.asSequence()
-                    // The list is only fetched to find a matching variant, but it still has to
-                    // respect the channel: a newer pre-release outranks the latest stable, so
-                    // without this a stable build is quietly offered a pre-release.
                     .filter { includePrerelease || it.asJsonObject?.get("prerelease")?.asBoolean != true }
                     .mapNotNull { el ->
                         el.asJsonObject?.let { parseReleaseObject(it, noiconVariant, strictVariantMatch) }
@@ -797,7 +566,7 @@ object AppUpdater {
                         compareVersions(a.version, b.version)
                     }
             } else {
-                val text = httpGet(UPDATE_URL) ?: return null
+                val text = httpGet(latestUrl) ?: return null
                 parseReleaseObject(
                     Gson().fromJson(text, JsonObject::class.java) ?: return null,
                     noiconVariant,
@@ -816,6 +585,7 @@ object AppUpdater {
     ): UpdateInfo? {
         return try {
             val tag = root.get("tag_name")?.asString ?: return null
+            if (!matchesReleaseTag(tag)) return null
             val assets = root.getAsJsonArray("assets") ?: return null
             val asset = pickAsset(assets, noiconVariant, strictVariantMatch) ?: return null
             UpdateInfo().apply {
@@ -837,13 +607,25 @@ object AppUpdater {
      * the same build: same ABI (arm64-v8a on 64-bit devices, universal otherwise) and the
      * same launcher-icon variant (normal vs -noicon).
      */
+    private fun matchesBuildEdition(assetLowerName: String): Boolean {
+        if (!assetLowerName.endsWith(".apk")) return false
+        if (assetLowerName.startsWith("com.android.vending") || assetLowerName.contains("companion-vending")) {
+            return false
+        }
+        val isHuaweiGmsAsset = assetLowerName.startsWith("com.google.android.gms") ||
+            assetLowerName.contains("original-huawei") ||
+            assetLowerName.contains("-hw")
+        return isHuaweiGmsAsset == isOriginalMicrog
+    }
+
     private fun pickAsset(
         assets: JsonArray,
         noiconVariant: Boolean,
         strictVariantMatch: Boolean = false
     ): JsonObject? {
         val apks = assets.mapNotNull { it.asJsonObject }.filter { obj ->
-            obj.get("name")?.asString?.lowercase()?.endsWith(".apk") == true
+            val name = obj.get("name")?.asString?.lowercase() ?: ""
+            matchesBuildEdition(name)
         }
         if (apks.isEmpty()) return null
         val arm64Preferred = Build.SUPPORTED_ABIS.any { it == "arm64-v8a" }
@@ -883,7 +665,20 @@ object AppUpdater {
     // Version comparison
     // -----------------------------------------------------------------------------------
 
-    private fun normalizeVersion(v: String): String = v.trim().removePrefix("v").removePrefix("V")
+    private fun normalizeVersion(v: String): String {
+        var s = v.trim()
+        for (prefix in listOf("microg-original-hw-", "microg-original-", "microg-re-")) {
+            if (s.startsWith(prefix, ignoreCase = true)) {
+                s = s.substring(prefix.length)
+                break
+            }
+        }
+        s = s.removePrefix("v").removePrefix("V")
+        if (s.endsWith("-hw", ignoreCase = true)) {
+            s = s.dropLast(3)
+        }
+        return s
+    }
 
     /** Parses a version into (core numbers, pre-release identifiers) per semver. */
     private fun semverParts(v: String): Pair<List<Int>, List<String>> {
@@ -1036,7 +831,7 @@ object AppUpdater {
      */
     @JvmStatic
     fun maybeWarnWrongAbiVariant(activity: Activity): Boolean {
-        if (isAbiWarningShowing || isDownloadInProgress || pendingAction != null) return true
+        if (isAbiWarningShowing || isDownloadInProgress) return true
         if (!isArm64OnlyOn32BitProcess(activity)) return false
         if (activity.isFinishing) return false
 
@@ -1056,7 +851,7 @@ object AppUpdater {
         return true
     }
 
-    /** Downloads the armeabi-v7a build and hands it to the system installer. */
+    /** Opens the armeabi-v7a build download in the system browser. */
     @JvmStatic
     fun downloadAndInstallArmv7Variant(activity: Activity) {
         downloadAndInstallNamedVariant(
@@ -1066,12 +861,12 @@ object AppUpdater {
             preferNoicon = activity.resources.getBoolean(R.bool.hide_launcher_icon_available),
             directFileNameBuilder = { version, noicon ->
                 if (noicon) "microg-$version-noicon-armeabi-v7a.apk"
-                else "microg-$version-armeabi-v7a.apk"
+                else "microg-$version-icon-armeabi-v7a.apk"
             }
         )
     }
 
-    /** Downloads the universal build and hands it to the system installer. */
+    /** Opens the universal build download in the system browser. */
     @JvmStatic
     fun downloadAndInstallUniversalVariant(activity: Activity) {
         downloadAndInstallNamedVariant(
@@ -1094,15 +889,9 @@ object AppUpdater {
         directFileNameBuilder: (version: String, noicon: Boolean) -> String,
         requireUniversalName: Boolean = false
     ) {
-        if (!ensureInstallPermission(activity) {
-            downloadAndInstallNamedVariant(
-                it, titleRes, preferredNameContains, preferNoicon, directFileNameBuilder, requireUniversalName
-            )
-        }) return
         ensureUpdateNotificationPermission(activity)
 
         var isCancelled = false
-        var activeConnection: HttpURLConnection? = null
 
         val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
@@ -1116,32 +905,35 @@ object AppUpdater {
             .setCancelable(false)
             .setNegativeButton(android.R.string.cancel) { _, _ ->
                 isCancelled = true
-                Thread {
-                    try { activeConnection?.disconnect() } catch (_: Exception) {}
-                }.start()
             }
             .setOnCancelListener {
                 isCancelled = true
-                Thread {
-                    try { activeConnection?.disconnect() } catch (_: Exception) {}
-                }.start()
             }
             .create()
         dialog.show()
 
         Thread {
-            val candidateUrls = mutableListOf<String>()
+            var resolvedUrl: String? = null
 
-            try {
-                val text = httpGet("$RELEASES_URL?per_page=15")
-                if (text != null) {
-                    val all = Gson().fromJson(text, JsonArray::class.java)
-                    all?.forEach { el ->
-                        val root = el.asJsonObject ?: return@forEach
-                        val assets = root.getAsJsonArray("assets") ?: return@forEach
+            val apiUrls = if (isOriginalMicrog) {
+                listOf("$PRIMARY_RELEASES_URL?per_page=15")
+            } else {
+                listOf("$PRIMARY_RELEASES_URL?per_page=15", "$RELEASES_URL?per_page=15")
+            }
+
+            for (apiUrl in apiUrls) {
+                if (resolvedUrl != null || isCancelled) break
+                try {
+                    val text = httpGet(apiUrl) ?: continue
+                    val all = Gson().fromJson(text, JsonArray::class.java) ?: continue
+                    for (el in all) {
+                        val root = el.asJsonObject ?: continue
+                        val assets = root.getAsJsonArray("assets") ?: continue
+                        val tag = root.get("tag_name")?.asString ?: continue
+                        if (!matchesReleaseTag(tag)) continue
                         val match = assets.mapNotNull { it.asJsonObject }.firstOrNull { obj ->
                             val name = obj.get("name")?.asString?.lowercase() ?: return@firstOrNull false
-                            if (!name.endsWith(".apk")) return@firstOrNull false
+                            if (!matchesBuildEdition(name)) return@firstOrNull false
                             val hasNoicon = name.contains("noicon")
                             if (hasNoicon != preferNoicon) return@firstOrNull false
                             when {
@@ -1153,45 +945,27 @@ object AppUpdater {
                             }
                         }
                         val url = match?.get("browser_download_url")?.asString
-                        if (!url.isNullOrEmpty() && !candidateUrls.contains(url)) {
-                            candidateUrls.add(url)
+                        if (!url.isNullOrEmpty()) {
+                            resolvedUrl = url
+                            break
                         }
                     }
-                }
-            } catch (_: Exception) {}
+                } catch (_: Exception) {}
+            }
 
             val cleanVersion = BuildConfig.VERSION_NAME.trim().removePrefix("v").removePrefix("V")
                 .substringBefore(" ").substringBefore("(")
-            val tag = "v$cleanVersion"
             val fileName = directFileNameBuilder(cleanVersion, preferNoicon)
-            listOf(
-                "https://github.com/MorpheApp/MicroG-RE/releases/download/$tag/$fileName",
-                "https://github.com/MorpheApp/MicroG-RE/releases/latest/download/$fileName"
-            ).forEach { if (!candidateUrls.contains(it)) candidateUrls.add(it) }
-
-            val targetFile = File(activity.cacheDir, "$DOWNLOAD_DIR/microg-re-abi-update.apk")
-            var downloadedFile: File? = null
-            for (url in candidateUrls) {
-                if (isCancelled) break
-                Log.i(TAG, "Attempting ABI variant download from: $url")
-                val file = downloadUrlCancellable(url, targetFile, { isCancelled }) { conn ->
-                    activeConnection = conn
-                }
-                if (file != null && file.length() > 0L) {
-                    downloadedFile = file
-                    break
-                }
+            val finalUrl = resolvedUrl ?: if (isOriginalMicrog) {
+                PRIMARY_WEB_RELEASES_URL
+            } else {
+                "https://github.com/MorpheApp/MicroG-RE/releases/download/$cleanVersion/$fileName"
             }
 
             runOnUiThread(activity) {
                 dialog.dismiss()
-                if (isCancelled) return@runOnUiThread
-                if (downloadedFile == null) {
-                    Log.e(TAG, "ABI variant download failed for all candidate URLs")
-                    showErrorDialog(activity, activity.getString(R.string.update_download_failed))
-                } else {
-                    Log.i(TAG, "ABI variant downloaded: ${downloadedFile.length()} bytes")
-                    launchInstaller(activity, downloadedFile)
+                if (!isCancelled) {
+                    openDownloadInBrowser(activity, finalUrl)
                 }
             }
         }.start()

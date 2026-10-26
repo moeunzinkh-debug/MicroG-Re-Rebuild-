@@ -35,6 +35,9 @@ class UnpackingRedirectActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) {
+            return
+        }
         val target =
             IntentCompat.getParcelableExtra(intent, EXTRA_TARGET, PendingIntent::class.java)
         if (target != null) {

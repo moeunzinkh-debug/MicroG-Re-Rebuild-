@@ -5,7 +5,7 @@
 
 buildscript {
     ext.applicationNamespace = "com.google.android.gms"
-    ext.basePackageName = "app.revanced"
+    ext.basePackageName = project.hasProperty("basePackageName") ? project.property("basePackageName").toString() : "app.revanced"
 
     ext.cronetVersion = '102.5005.125'
     ext.wearableVersion = '0.1.1'
@@ -74,17 +74,24 @@ buildscript {
 }
 
 def execResult(... args) {
-    providers.exec { commandLine args }.standardOutput.asText.get()
+    def res = providers.exec {
+        commandLine args
+        setIgnoreExitValue(true)
+    }
+    return res.result.get().exitValue == 0 ? res.standardOutput.asText.get() : ""
 }
 
-def ignoreGit = providers.environmentVariable('GRADLE_MICROG_VERSION_WITHOUT_GIT').getOrElse('0') == '1'
+def ignoreGit = providers.environmentVariable('GRADLE_MICROG_VERSION_WITHOUT_GIT').getOrElse('1') == '1'
 def gmsVersion = "25.24.32"
 def gmsVersionCode = Integer.parseInt(gmsVersion.replaceAll('\\.', ''))
 def vendingVersion = "40.2.26"
 def vendingVersionCode = Integer.parseInt(vendingVersion.replaceAll('\\.', ''))
-def gitVersionBase = !ignoreGit ? execResult('git', 'describe', '--tags', '--abbrev=0', '--match=v[0-9]*').trim().substring(1) : "v0.0.0.$gmsVersionCode"
-def gitCommitCount = !ignoreGit ? Integer.parseInt(execResult('git', 'rev-list', '--count', "v$gitVersionBase..HEAD").trim()) : 0
-def gitCommitId = !ignoreGit ? execResult('git', 'show-ref', '--abbrev=7', '--head', 'HEAD').trim().split(' ')[0] : '0000000'
+def describedTag = !ignoreGit ? execResult('git', 'describe', '--tags', '--abbrev=0', '--match=v[0-9]*').trim() : ""
+def gitVersionBase = describedTag.startsWith('v') ? describedTag.substring(1) : "0.0.0.$gmsVersionCode"
+def commitCountStr = (!ignoreGit && describedTag.startsWith('v')) ? execResult('git', 'rev-list', '--count', "v$gitVersionBase..HEAD").trim() : "0"
+def gitCommitCount = commitCountStr.isInteger() ? Integer.parseInt(commitCountStr) : 0
+def headRef = !ignoreGit ? execResult('git', 'show-ref', '--abbrev=7', '--head', 'HEAD').trim() : ""
+def gitCommitId = headRef ? headRef.split(' ')[0] : '0000000'
 def gitDirty = false
 if (!ignoreGit) {
   execResult('git', 'status', '--porcelain').lines().each { stat ->
@@ -104,13 +111,16 @@ if (!ignoreGit) {
   }
 }
 
-// RE specific version name and code
+// Version name and code (MicroG-RE default vs Original microG when -PbasePackageName=com.google)
+def isOriginalMicrogBuild = (basePackageName == "com.google")
+def reGmsVersionName = "7.3.0-dev.2"
+def origGmsVersionName = "0.3.17.255070"
 def ourGmsVersionCode = 255070302
-def ourGmsVersionName = "7.3.0-dev.2"
-def ourVendingVersionCode = ourGmsVersionCode
-def ourVendingVersionName = ourGmsVersionName
+def ourGmsVersionName = isOriginalMicrogBuild ? origGmsVersionName : reGmsVersionName
+def ourVendingVersionCode = isOriginalMicrogBuild ? 84507030 : ourGmsVersionCode
+def ourVendingVersionName = isOriginalMicrogBuild ? "0.3.17.402260" : ourGmsVersionName
 
-logger.lifecycle('Starting build for GMS version {} ({})...', ourGmsVersionName, ourGmsVersionCode)
+logger.lifecycle('Starting build for GMS ({}) version {} ({})...', basePackageName, ourGmsVersionName, ourGmsVersionCode)
 
 allprojects {
     apply plugin: 'idea'

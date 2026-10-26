@@ -2,6 +2,12 @@
 gen/
 bin/
 build/
+dist/
+apks/
+keystore/
+*.jks
+*.keystore
+*.p12
 .gradle/
 .idea/
 user.gradle

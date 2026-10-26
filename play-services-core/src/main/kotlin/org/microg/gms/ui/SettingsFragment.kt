@@ -325,10 +325,15 @@ class SettingsFragment : ResourceSettingsFragment() {
     }
 
     private fun openGithub() {
+        val url = if (com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME == "com.google") {
+            PREF_ORIGINAL_GITHUB_URL
+        } else {
+            PREF_GITHUB_URL
+        }
         try {
-            startActivity(Intent(Intent.ACTION_VIEW, PREF_GITHUB_URL.toUri()))
+            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
         } catch (e: ActivityNotFoundException) {
-            Log.e(TAG, "Error opening link: $PREF_GITHUB_URL", e)
+            Log.e(TAG, "Error opening link: $url", e)
         }
     }
 
@@ -357,6 +362,7 @@ class SettingsFragment : ResourceSettingsFragment() {
 
         private const val ACTIVITY_LAUNCHER_CONTROL = "org.microg.gms.ui.SettingsActivityLauncher"
         private const val PREF_GITHUB_URL = "https://github.com/MorpheApp/MicroG-RE"
+        private const val PREF_ORIGINAL_GITHUB_URL = "https://github.com/moeunzinkh-debug/MicroG-Re-Rebuild-"
     }
 
     init {

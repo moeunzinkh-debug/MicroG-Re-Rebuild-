@@ -29,7 +29,7 @@ import java.util.List;
 public class AboutFragment extends AbstractAboutFragment {
 
     public static String getSelfVersion(Context context) {
-        return getAppVersion(context);
+        return getAppVersion(context) + " [" + com.google.android.gms.BuildConfig.EDITION_TAG + "]";
     }
 
     @Override

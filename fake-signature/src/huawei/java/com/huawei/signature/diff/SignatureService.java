@@ -24,7 +24,7 @@ import java.io.PrintWriter;
 import java.util.Date;
 
 public class SignatureService extends Service {
-    private static final String TAG = "SignatureService";
+    private static final String TAG = "MicroG-Orig:HwSig";
     private SQLiteDatabase database;
     private AppListDatabaseOpenHelper openHelper;
     private long start;

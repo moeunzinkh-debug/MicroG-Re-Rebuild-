@@ -117,6 +117,20 @@ dependencies {
     implementation "com.atlassian.commonmark:commonmark:0.12.1"
 }
 
+def releaseStorePath = providers.environmentVariable("KEYSTORE_FILE").orNull ?: localProperties.getProperty("signing.storeFile", rootProject.file("keystore/release.p12").absolutePath)
+def releaseStoreFile = file(releaseStorePath)
+def releaseStorePass = providers.environmentVariable("KEYSTORE_PASSWORD").orNull ?: localProperties.getProperty("signing.storePassword", "")
+def releaseKeyAlias = providers.environmentVariable("KEYSTORE_ENTRY_ALIAS").orNull ?: localProperties.getProperty("signing.keyAlias", "")
+def releaseKeyPass = providers.environmentVariable("KEYSTORE_ENTRY_PASSWORD").orNull ?: localProperties.getProperty("signing.keyPassword", releaseStorePass)
+def hasReleaseKeystore = releaseStoreFile.exists() && !releaseStorePass.isEmpty() && !releaseKeyAlias.isEmpty()
+
+def debugStorePath = providers.environmentVariable("DEBUG_KEYSTORE_FILE").orNull ?: localProperties.getProperty("signing.debugStoreFile", rootProject.file("keystore/debug.p12").absolutePath)
+def debugStoreFile = file(debugStorePath)
+def debugStorePass = providers.environmentVariable("DEBUG_KEYSTORE_PASSWORD").orNull ?: localProperties.getProperty("signing.debugStorePassword", "")
+def debugKeyAlias = providers.environmentVariable("DEBUG_KEYSTORE_ENTRY_ALIAS").orNull ?: localProperties.getProperty("signing.debugKeyAlias", "")
+def debugKeyPass = providers.environmentVariable("DEBUG_KEYSTORE_ENTRY_PASSWORD").orNull ?: localProperties.getProperty("signing.debugKeyPassword", debugStorePass)
+def hasCustomDebugKeystore = debugStoreFile.exists() && !debugStorePass.isEmpty() && !debugKeyAlias.isEmpty()
+
 android {
     namespace "$applicationNamespace"
 
@@ -143,6 +157,8 @@ android {
 
         buildConfigField "String", "APPLICATION_NAMESPACE", "\"${android.namespace}\""
         buildConfigField "String", "BASE_PACKAGE_NAME", "\"$basePackageName\""
+        buildConfigField "String", "EDITION_TAG", "\"MicroG-RE\""
+        buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-re-v\""
 
         //noinspection GroovyConstructorNamedArguments
         manifestPlaceholders = [
@@ -211,10 +227,41 @@ android {
         disable 'FlowOperatorInvokedInComposition', 'CoroutineCreationDuringComposition', 'StateFlowValueCalledInComposition'
     }
 
+    signingConfigs {
+        debug {
+            if (hasCustomDebugKeystore) {
+                storeFile debugStoreFile
+                storePassword debugStorePass
+                keyAlias debugKeyAlias
+                keyPassword debugKeyPass
+            }
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
+        if (hasReleaseKeystore) {
+            releaseCustom {
+                storeFile releaseStoreFile
+                storePassword releaseStorePass
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPass
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.releaseCustom
+            }
         }
     }
 
@@ -226,11 +273,15 @@ android {
         "huawei" {
             dimension 'target'
             versionNameSuffix "-hw"
+            buildConfigField "String", "EDITION_TAG", "\"MicroG-Original-HW\""
+            buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-original-hw-v\""
         }
         "user" {
             dimension 'target'
             applicationId = "org.microg.gms"
             versionNameSuffix "-user"
+            buildConfigField "String", "EDITION_TAG", "\"MicroG-User\""
+            buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-user-v\""
             manifestPlaceholders = [appLabel:"@string/limited_services_app_name", basePackageName:"org.microg"]
             matchingFallbacks = ['default']
             resValue "string", "package_id", "org.microg.gms"
@@ -268,7 +319,8 @@ if (file('user.gradle').exists()) {
 }
 
 android.applicationVariants.all { variant ->
+    def buildSuffix = variant.name.toLowerCase().endsWith("debug") ? "-debug" : (hasReleaseKeystore ? "" : "-unsigned")
     variant.outputs.each { output ->
-        output.outputFileName = variant.applicationId + "-" + variant.versionCode + variant.versionName.substring(version.length()) + ".apk"
+        output.outputFileName = variant.applicationId + "-" + variant.versionCode + variant.versionName.substring(version.length()) + buildSuffix + ".apk"
     }
 }

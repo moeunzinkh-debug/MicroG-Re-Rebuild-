@@ -1,0 +1,128 @@
+name: "Tag Build — MicroG Original (Huawei)"
+
+on:
+  push:
+    tags:
+      - "microg-original-hw-v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "MicroG Original Huawei tag name (e.g. microg-original-hw-v0.3.17.255070)"
+        required: true
+        default: "microg-original-hw-v0.3.17.255070"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-microg-original-hw-tag:
+    name: "MicroG Original Huawei Tag Build & Release"
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
+
+    steps:
+      - name: "Free disk space"
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/go
+
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: "Check sensitive install permissions"
+        run: python3 scripts/check_sensitive_manifest_permissions.py
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: "Setup Gradle"
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
+
+      - name: "Prepare v1+v2+v3 signing keystores"
+        env:
+          SECRET_KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          SECRET_KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          SECRET_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          SECRET_KEY_PASS: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
+        run: |
+          KEY_DIR="$RUNNER_TEMP/keystore"
+          mkdir -p "$KEY_DIR"
+          DBG_PASS="$(openssl rand -hex 16)"
+          REL_PASS="$(openssl rand -hex 16)"
+          KEYSTORE_DIR="$KEY_DIR" \
+          KEYSTORE_PASSWORD="$REL_PASS" \
+          KEYSTORE_ENTRY_ALIAS="microg-release" \
+          DEBUG_KEYSTORE_PASSWORD="$DBG_PASS" \
+          DEBUG_KEYSTORE_ENTRY_ALIAS="microg-dev" \
+          bash scripts/generate_keystore.sh >/dev/null
+
+          echo "DEBUG_KEYSTORE_FILE=$KEY_DIR/debug.p12" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_ALIAS=microg-dev" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+
+          if [[ -n "$SECRET_KEYSTORE_B64" && -n "$SECRET_KEYSTORE_ALIAS" && -n "$SECRET_KEYSTORE_PASS" ]]; then
+            echo "$SECRET_KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEY_DIR/custom-release.keystore"
+            echo "KEYSTORE_FILE=$KEY_DIR/custom-release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          else
+            echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+          fi
+
+      - name: "Build & Verify MicroG Original Huawei (-hw) APKs"
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          mkdir -p dist-hw
+          VER="$(grep -oP 'def origGmsVersionName = "\K[^"]+' build.gradle)"
+          TAG_NAME="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+          build_hw() {
+            local gradle_task="$1" out_dir="$2" extra_args="$3" dest_name="$4"
+            rm -rf "$out_dir"
+            # shellcheck disable=SC2086
+            ./gradlew "$gradle_task" -PbasePackageName=com.google $extra_args
+            cp "$(find "$out_dir" -maxdepth 2 -name '*.apk' | head -n 1)" "dist-hw/$dest_name"
+          }
+
+          build_hw ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-arm64-v8a.apk"
+          build_hw ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-armeabi-v7a.apk"
+          build_hw ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "" "com.google.android.gms-255070302-hw.apk"
+          build_hw ":vending-app:assembleHuaweiRelease" "vending-app/build/outputs/apk/huawei/release" "" "com.android.vending-84507030-hw.apk"
+
+          build_hw ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-debug-arm64-v8a.apk"
+          build_hw ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-debug-armeabi-v7a.apk"
+          build_hw ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "" "com.google.android.gms-255070302-hw-debug.apk"
+          build_hw ":vending-app:assembleHuaweiDebug" "vending-app/build/outputs/apk/huawei/debug" "" "com.android.vending-84507030-hw-debug.apk"
+
+          bash scripts/verify_built_apk.sh dist-hw/*.apk
+          (cd dist-hw && sha256sum *.apk > SHA256SUMS-microg-original-hw.txt)
+
+      - name: "Publish MicroG Original Huawei Tag Release"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: "[MicroG-Original-HW] ${{ steps.meta.outputs.tag }} — Huawei All Models (Debug & Release)"
+          prerelease: ${{ contains(steps.meta.outputs.tag, '-dev') || contains(steps.meta.outputs.tag, '-rc') }}
+          files: |
+            dist-hw/*.apk
+            dist-hw/SHA256SUMS-microg-original-hw.txt
+          generate_release_notes: true

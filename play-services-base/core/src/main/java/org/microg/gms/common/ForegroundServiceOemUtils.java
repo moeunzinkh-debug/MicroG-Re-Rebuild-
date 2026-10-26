@@ -14,7 +14,7 @@ public class ForegroundServiceOemUtils {
     private static final String TAG = "BatteryOptimizationOem";
 
     private static final String[] KNOWN_RESTRICTED_MANUFACTURERS = {
-            "huawei", "xiaomi", "oneplus", "samsung", "meizu", "asus", "wiko",
+            "huawei", "honor", "xiaomi", "oneplus", "samsung", "meizu", "asus", "wiko",
             "lenovo", "oppo", "vivo", "realme", "motorola", "blackview", "tecno",
             "sony", "unihertz"
     };
