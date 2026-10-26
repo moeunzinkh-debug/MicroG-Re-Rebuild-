@@ -338,8 +338,8 @@ jobs:
             exit 1
           fi
 
-          GMS_CERT="$("$APKSIGNER" verify --print-certs "$GMS_APK" | grep 'Signer #1 certificate SHA-256 digest:' | awk '{print $NF}')"
-          VENDING_CERT="$("$APKSIGNER" verify --print-certs "$VENDING_APK" | grep 'Signer #1 certificate SHA-256 digest:' | awk '{print $NF}')"
+          GMS_CERT="$("$APKSIGNER" verify --print-certs "$GMS_APK" | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
+          VENDING_CERT="$("$APKSIGNER" verify --print-certs "$VENDING_APK" | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
           if [[ -z "$GMS_CERT" || "$GMS_CERT" != "$VENDING_CERT" ]]; then
             echo "::error title=Certificate Mismatch::GMS ($GMS_CERT) != VENDING ($VENDING_CERT)"
             exit 1
