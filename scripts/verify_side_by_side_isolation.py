@@ -24,17 +24,18 @@ def find_aapt2() -> str:
 
 
 ELEM_RE = re.compile(r"^(\s*)E:\s+([A-Za-z0-9_.-]+)\s+\(line=\d+\)")
-ATTR_STR_RE = re.compile(r'^\s*A:\s+(?:[A-Za-z0-9_.-]+:)?([A-Za-z0-9_.-]+)(?:\(0x[0-9a-fA-F]+\))?="([^"]*)"')
+# Matches both:
+#   A: package="org.microg.android.gms" (Raw: "org.microg.android.gms")
+#   A: android:name(0x01010003)="..." (Raw: "...")
+#   A: http://schemas.android.com/apk/res/android:authorities(0x01010018)="..." (Raw: "...")
+ATTR_STR_RE = re.compile(
+    r'^\s*A:\s+(?:\S+:)?([A-Za-z0-9_.-]+)(?:\(0x[0-9a-fA-F]+\))?="([^"]*)"'
+)
 
 
-def extract_globals(aapt2: str, apk_path: str) -> dict:
-    out = subprocess.check_output(
-        [aapt2, "dump", "xmltree", apk_path, "--file", "AndroidManifest.xml"],
-        text=True,
-        errors="replace",
-    )
+def parse_xmltree_manifest(out: str, apk_name: str) -> dict:
     info = {
-        "apk": os.path.basename(apk_path),
+        "apk": apk_name,
         "package": set(),
         "sharedUserId": set(),
         "permission": set(),
@@ -43,17 +44,26 @@ def extract_globals(aapt2: str, apk_path: str) -> dict:
         "provider_authority": set(),
         "library": set(),
         "original-package": set(),
+        "adopt-permissions": set(),
+        "instrumentation": set(),
+        "overlay": set(),
     }
 
-    current_tag = None
+    stack = []  # list of (indent_len, tag_name)
     for line in out.splitlines():
         m_el = ELEM_RE.match(line)
         if m_el:
-            current_tag = m_el.group(2)
+            indent = len(m_el.group(1))
+            tag = m_el.group(2)
+            while stack and stack[-1][0] >= indent:
+                stack.pop()
+            stack.append((indent, tag))
             continue
+
         m_attr = ATTR_STR_RE.match(line)
-        if not m_attr or not current_tag:
+        if not m_attr or not stack:
             continue
+        current_tag = stack[-1][1]
         attr_name, val = m_attr.group(1), m_attr.group(2).strip()
         if not val:
             continue
@@ -63,35 +73,61 @@ def extract_globals(aapt2: str, apk_path: str) -> dict:
                 info["package"].add(val)
             elif attr_name == "sharedUserId":
                 info["sharedUserId"].add(val)
-        elif current_tag in ("permission", "permission-tree", "permission-group"):
-            if attr_name == "name" and not val.startswith("android.permission-group."):
+        elif current_tag in (
+            "permission",
+            "permission-tree",
+            "permission-group",
+            "original-package",
+            "adopt-permissions",
+        ):
+            if attr_name == "name":
                 info[current_tag].add(val)
-        elif current_tag == "provider" and attr_name == "authorities":
-            for auth in val.split(";"):
-                if auth.strip():
-                    info["provider_authority"].add(auth.strip())
-        elif current_tag in ("library", "static-library") and attr_name == "name":
-            info["library"].add(val)
-        elif current_tag == "original-package" and attr_name == "name":
-            info["original-package"].add(val)
+        elif current_tag in ("library", "static-library"):
+            if attr_name == "name":
+                info["library"].add(val)
+        elif current_tag == "instrumentation":
+            if attr_name == "name":
+                info["instrumentation"].add(val)
+        elif current_tag == "overlay":
+            if attr_name == "targetPackage":
+                info["overlay"].add(val)
+        elif current_tag == "provider":
+            if attr_name == "authorities":
+                for auth in val.split(";"):
+                    auth = auth.strip()
+                    if auth:
+                        info["provider_authority"].add(auth)
 
     return info
 
 
+def extract_globals(aapt2: str, apk_path: str) -> dict:
+    out = subprocess.check_output(
+        [aapt2, "dump", "xmltree", apk_path, "--file", "AndroidManifest.xml"],
+        text=True,
+        errors="replace",
+    )
+    info = parse_xmltree_manifest(out, os.path.basename(apk_path))
+    if len(info["permission"]) < 5 or len(info["provider_authority"]) < 5:
+        raise SystemExit(
+            f"ERROR: Unexpectedly low parsed manifest globals in {info['apk']}: "
+            f"perms={len(info['permission'])} providers={len(info['provider_authority'])}. "
+            f"Check aapt2 xmltree output format!"
+        )
+    return info
+
+
 def main() -> int:
-    if len(sys.argv) < 3:
-        print(f"Usage: {sys.argv[0]} <apk1> <apk2> [apk3 ...]", file=sys.stderr)
+    apks = sys.argv[1:]
+    if len(apks) < 2:
+        print(
+            "Usage: verify_side_by_side_isolation.py <apk1> <apk2> [<apk3> ...]",
+            file=sys.stderr,
+        )
         return 2
 
     aapt2 = find_aapt2()
-    records = [extract_globals(aapt2, p) for p in sys.argv[1:]]
-
-    for r in records:
-        print(
-            f"[APK] {r['apk']}: pkg={sorted(r['package'])} "
-            f"perms={len(r['permission'])} providers={len(r['provider_authority'])} "
-            f"libs={sorted(r['library'])}"
-        )
+    parsed = [extract_globals(aapt2, p) for p in apks]
 
     categories = [
         "package",
@@ -102,28 +138,47 @@ def main() -> int:
         "provider_authority",
         "library",
         "original-package",
+        "adopt-permissions",
+        "instrumentation",
+        "overlay",
     ]
 
+    for item in parsed:
+        print(
+            f"[APK] {item['apk']}: pkg={sorted(item['package'])} "
+            f"sharedUid={sorted(item['sharedUserId'])} "
+            f"perms={len(item['permission'])} "
+            f"permTrees={len(item['permission-tree'])} "
+            f"permGroups={len(item['permission-group'])} "
+            f"providers={len(item['provider_authority'])} "
+            f"libs={sorted(item['library'])}"
+        )
+
     collisions = []
-    for i in range(len(records)):
-        for j in range(i + 1, len(records)):
-            a, b = records[i], records[j]
-            for cat in categories:
-                overlap = sorted(a[cat] & b[cat])
-                if overlap:
-                    collisions.append((a["apk"], b["apk"], cat, overlap))
+    for cat in categories:
+        seen = {}
+        for item in parsed:
+            for val in sorted(item[cat]):
+                if val in seen:
+                    collisions.append((cat, val, seen[val], item["apk"]))
+                else:
+                    seen[val] = item["apk"]
 
     if collisions:
-        for apk_a, apk_b, cat, items in collisions:
+        print(
+            "\nERROR: Side-by-side APK installation collision(s) detected:",
+            file=sys.stderr,
+        )
+        for cat, val, apk_a, apk_b in collisions:
             print(
-                f"COLLISION [{cat}] between {apk_a} and {apk_b}: {items}",
+                f"  - [{cat}] '{val}' declared by BOTH {apk_a} AND {apk_b}",
                 file=sys.stderr,
             )
         return 1
 
     print(
-        f"OK: Verified 0 manifest collisions across {len(records)} APKs "
-        f"({', '.join(r['apk'] for r in records)})."
+        f"OK: Verified 0 manifest collisions across {len(parsed)} APKs "
+        f"({', '.join(x['apk'] for x in parsed)})."
     )
     return 0
 

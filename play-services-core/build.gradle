@@ -361,12 +361,22 @@ abstract class IsolateManifestTask extends DefaultTask {
     @OutputFile
     abstract RegularFileProperty getUpdatedManifest()
 
+    private static boolean isOwnedByEdition(String id, String appId, String basePkg) {
+        return id == appId ||
+               id.startsWith(appId + ".") ||
+               id.startsWith(basePkg + ".android.") ||
+               id.startsWith(basePkg + ".firebase.") ||
+               id == (basePkg + ".settings") ||
+               id.startsWith("android.permission-group.")
+    }
+
     @TaskAction
     void taskAction() {
         String androidNs = "http://schemas.android.com/apk/res/android"
         String appId = applicationId.get()
-        String[] parts = appId.split("\\.")
-        String pkgPrefix = parts.length >= 2 ? (parts[0] + "." + parts[1] + ".") : (appId + ".")
+        String basePkg = appId.endsWith(".android.gms")
+                ? appId.substring(0, appId.length() - ".android.gms".length())
+                : appId
 
         def dbf = DocumentBuilderFactory.newInstance()
         dbf.setNamespaceAware(true)
@@ -380,13 +390,15 @@ abstract class IsolateManifestTask extends DefaultTask {
             root.removeAttributeNS(androidNs, "sharedUserId")
         }
 
+        int totalPerms = 0
         Map<String, String> renamedPerms = [:]
         ["permission", "permission-tree", "permission-group"].each { String tagName ->
             def nodes = root.getElementsByTagName(tagName)
+            totalPerms += nodes.length
             for (int i = 0; i < nodes.length; i++) {
                 Element el = (Element) nodes.item(i)
                 String name = el.getAttributeNS(androidNs, "name")
-                if (name && !name.startsWith(pkgPrefix) && !name.startsWith(appId + ".") && !name.startsWith("android.permission-group.")) {
+                if (name && !isOwnedByEdition(name, appId, basePkg)) {
                     String newName = "${appId}.${name}"
                     renamedPerms[name] = newName
                     el.setAttributeNS(androidNs, "${nsPrefix}:name", newName)
@@ -413,6 +425,7 @@ abstract class IsolateManifestTask extends DefaultTask {
             }
         }
 
+        int rewrittenAuthCount = 0
         def providers = root.getElementsByTagName("provider")
         for (int i = 0; i < providers.length; i++) {
             Element prov = (Element) providers.item(i)
@@ -420,8 +433,9 @@ abstract class IsolateManifestTask extends DefaultTask {
             if (auths) {
                 String updatedAuths = auths.split(";").collect { String a ->
                     String trimmed = a.trim()
-                    if (trimmed && !trimmed.startsWith(pkgPrefix) && !trimmed.startsWith(appId + ".")) {
+                    if (trimmed && !isOwnedByEdition(trimmed, appId, basePkg)) {
                         String newAuth = "${appId}.${trimmed}"
+                        rewrittenAuthCount++
                         logger.lifecycle("ISOLATE_MANIFEST [{}]: Rewrote <provider> authority '{}' -> '{}'", appId, trimmed, newAuth)
                         return newAuth
                     }
@@ -438,13 +452,18 @@ abstract class IsolateManifestTask extends DefaultTask {
             for (int i = 0; i < libs.length; i++) {
                 Element lib = (Element) libs.item(i)
                 String lName = lib.getAttributeNS(androidNs, "name")
-                if (lName && !lName.startsWith(pkgPrefix) && lName != appId && !lName.startsWith(appId + ".")) {
+                if (lName && !isOwnedByEdition(lName, appId, basePkg)) {
                     String newLib = "${appId}.${lName}"
                     lib.setAttributeNS(androidNs, "${nsPrefix}:name", newLib)
                     logger.lifecycle("ISOLATE_MANIFEST [{}]: Rewrote <{}> '{}' -> '{}'", appId, libTag, lName, newLib)
                 }
             }
         }
+
+        logger.lifecycle(
+            "ISOLATE_MANIFEST_SUMMARY [{}]: totalPerms={} totalProviders={} rewrotePerms={} rewroteProviders={}",
+            appId, totalPerms, providers.length, renamedPerms.size(), rewrittenAuthCount
+        )
 
         def tf = TransformerFactory.newInstance().newTransformer()
         tf.setOutputProperty(OutputKeys.INDENT, "yes")

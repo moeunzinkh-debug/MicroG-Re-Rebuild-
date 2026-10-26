@@ -130,12 +130,13 @@ jobs:
             SUFFIX="-debug"
           fi
 
+          : > "$RUNNER_TEMP/gradle.log"
           build_variant() {
             local extra_args="$1"
             local dest_name="$2"
             rm -rf "$OUT_DIR"
             # shellcheck disable=SC2086
-            if ! ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"; then
+            if ! ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/gradle.log"; then
               ERR_MSG="$(grep -E "FAILURE:|What went wrong:|^\* |^> |Exception|Error|e: " "$RUNNER_TEMP/gradle.log" | head -n 20 | sed -E 's/(storePassword|keyPassword)=[^,}]*/\1=REDACTED/g' | tr '\n' ' ')"
               echo "::error title=Gradle Build Error (${dest_name})::${ERR_MSG}"
               exit 1
@@ -176,6 +177,10 @@ jobs:
             ERR_MSG="$(tail -n 20 "$RUNNER_TEMP/verify.log" | tr '\n' ' ')"
             echo "::error title=APK Verification Failed::${ERR_MSG}"
             exit 1
+          fi
+          RE_ISO="$(grep 'ISOLATE_MANIFEST' "$RUNNER_TEMP/gradle.log" | sort -u | tr '\n' '; ' || true)"
+          if [[ -n "$RE_ISO" ]]; then
+            echo "::notice title=MicroG-RE Isolated AAR Collisions (${{ matrix.target }})::${RE_ISO}"
           fi
           (cd dist && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
           (cd dist-arm64 && sha256sum *.apk > SHA256SUMS.txt)
