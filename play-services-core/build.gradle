@@ -157,6 +157,8 @@ android {
 
         buildConfigField "String", "APPLICATION_NAMESPACE", "\"${android.namespace}\""
         buildConfigField "String", "BASE_PACKAGE_NAME", "\"$basePackageName\""
+        buildConfigField "String", "EDITION_TAG", "\"MicroG-RE\""
+        buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-re-v\""
 
         //noinspection GroovyConstructorNamedArguments
         manifestPlaceholders = [
@@ -271,11 +273,15 @@ android {
         "huawei" {
             dimension 'target'
             versionNameSuffix "-hw"
+            buildConfigField "String", "EDITION_TAG", "\"MicroG-Original-HW\""
+            buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-original-hw-v\""
         }
         "user" {
             dimension 'target'
             applicationId = "org.microg.gms"
             versionNameSuffix "-user"
+            buildConfigField "String", "EDITION_TAG", "\"MicroG-User\""
+            buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-user-v\""
             manifestPlaceholders = [appLabel:"@string/limited_services_app_name", basePackageName:"org.microg"]
             matchingFallbacks = ['default']
             resValue "string", "package_id", "org.microg.gms"

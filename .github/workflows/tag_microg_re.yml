@@ -1,0 +1,128 @@
+name: "Tag Build — MicroG-RE"
+
+on:
+  push:
+    tags:
+      - "microg-re-v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "MicroG-RE tag name (e.g. microg-re-v7.3.0-dev.2)"
+        required: true
+        default: "microg-re-v7.3.0-dev.2"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-microg-re-tag:
+    name: "MicroG-RE Tag Build & Release"
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
+
+    steps:
+      - name: "Free disk space"
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/go
+
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: "Check sensitive install permissions"
+        run: python3 scripts/check_sensitive_manifest_permissions.py
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: "Setup Gradle"
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
+
+      - name: "Prepare v1+v2+v3 signing keystores"
+        env:
+          SECRET_KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          SECRET_KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          SECRET_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          SECRET_KEY_PASS: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
+        run: |
+          KEY_DIR="$RUNNER_TEMP/keystore"
+          mkdir -p "$KEY_DIR"
+          DBG_PASS="$(openssl rand -hex 16)"
+          REL_PASS="$(openssl rand -hex 16)"
+          KEYSTORE_DIR="$KEY_DIR" \
+          KEYSTORE_PASSWORD="$REL_PASS" \
+          KEYSTORE_ENTRY_ALIAS="microg-release" \
+          DEBUG_KEYSTORE_PASSWORD="$DBG_PASS" \
+          DEBUG_KEYSTORE_ENTRY_ALIAS="microg-dev" \
+          bash scripts/generate_keystore.sh >/dev/null
+
+          echo "DEBUG_KEYSTORE_FILE=$KEY_DIR/debug.p12" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_ALIAS=microg-dev" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+
+          if [[ -n "$SECRET_KEYSTORE_B64" && -n "$SECRET_KEYSTORE_ALIAS" && -n "$SECRET_KEYSTORE_PASS" ]]; then
+            echo "$SECRET_KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEY_DIR/custom-release.keystore"
+            echo "KEYSTORE_FILE=$KEY_DIR/custom-release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          else
+            echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+          fi
+
+      - name: "Build & Verify MicroG-RE APKs"
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          mkdir -p dist-re
+          VER="$(grep -oP 'def reGmsVersionName = "\K[^"]+' build.gradle)"
+          TAG_NAME="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+          build_re() {
+            local target="$1" lower="$2" extra_args="$3" dest_name="$4"
+            local out_dir="play-services-core/build/outputs/apk/default/${lower}"
+            rm -rf "$out_dir"
+            # shellcheck disable=SC2086
+            ./gradlew :play-services-core:assembleDefault${target} $extra_args
+            cp "$(find "$out_dir" -maxdepth 2 -name '*.apk' | head -n 1)" "dist-re/$dest_name"
+          }
+
+          build_re "Release" "release" "-Pabi=arm64-v8a" "microg-${VER}-icon-arm64-v8a.apk"
+          build_re "Release" "release" "-Pabi=armeabi-v7a" "microg-${VER}-icon-armeabi-v7a.apk"
+          build_re "Release" "release" "" "microg-${VER}.apk"
+          build_re "Release" "release" "-PnoIcon=true -Pabi=arm64-v8a" "microg-${VER}-noicon-arm64-v8a.apk"
+          build_re "Release" "release" "-PnoIcon=true -Pabi=armeabi-v7a" "microg-${VER}-noicon-armeabi-v7a.apk"
+          build_re "Release" "release" "-PnoIcon=true" "microg-${VER}-noicon.apk"
+          build_re "Debug" "debug" "-Pabi=arm64-v8a" "microg-${VER}-debug-icon-arm64-v8a.apk"
+          build_re "Debug" "debug" "" "microg-${VER}-debug.apk"
+
+          bash scripts/verify_built_apk.sh dist-re/*.apk
+          (cd dist-re && sha256sum *.apk > SHA256SUMS-microg-re.txt)
+
+      - name: "Publish MicroG-RE Tag Release"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: "[MicroG-RE] ${{ steps.meta.outputs.tag }} (Debug & Release)"
+          prerelease: ${{ contains(steps.meta.outputs.tag, '-dev') || contains(steps.meta.outputs.tag, '-rc') }}
+          files: |
+            dist-re/*.apk
+            dist-re/SHA256SUMS-microg-re.txt
+          generate_release_notes: true

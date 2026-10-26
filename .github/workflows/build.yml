@@ -8,11 +8,30 @@ on:
       - main
       - "arena/**"
   pull_request:
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      edition:
+        description: "Which edition to build (both | microg-re | microg-original-hw)"
+        required: false
+        default: "both"
+        type: choice
+        options:
+          - both
+          - microg-re
+          - microg-original-hw
+
+concurrency:
+  group: gradle-build-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: "MicroG-RE ${{ matrix.target }}"
+    name: "[MicroG-RE] ${{ matrix.target }}"
+    if: >-
+      (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'arena/')) &&
+      (inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-re')
     runs-on: ubuntu-latest
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
@@ -177,7 +196,10 @@ jobs:
           if-no-files-found: error
 
   build-huawei:
-    name: "Original microG Huawei ${{ matrix.target }}"
+    name: "[MicroG-Original-HW] ${{ matrix.target }}"
+    if: >-
+      (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'arena/')) &&
+      (inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-original-hw')
     runs-on: ubuntu-latest
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"

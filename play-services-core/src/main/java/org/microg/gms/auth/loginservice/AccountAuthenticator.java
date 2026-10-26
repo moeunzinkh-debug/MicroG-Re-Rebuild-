@@ -40,7 +40,7 @@ import static android.accounts.AccountManager.*;
 import static android.os.Build.VERSION.SDK_INT;
 
 public class AccountAuthenticator extends AbstractAccountAuthenticator {
-    private static final String TAG = "GmsAuthenticator";
+    private static final String TAG = "com.google".equals(com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME) ? "MicroG-Orig:Auth" : "MicroG-RE:Auth";
     public static final String KEY_OVERRIDE_PACKAGE = "overridePackage";
     public static final String KEY_OVERRIDE_CERTIFICATE = "overrideCertificate";
     private final Context context;

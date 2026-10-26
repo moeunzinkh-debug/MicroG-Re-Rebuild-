@@ -87,7 +87,8 @@ object AppUpdater {
     private const val MAX_NOTES_LENGTH = 8000
     private const val USER_AGENT = "MicroG-RE-Updater"
     private const val TIMEOUT_MS = 15000
-    private const val TAG = "AppUpdater"
+    private val TAG: String
+        get() = if (isOriginalMicrog) "MicroG-Orig:Updater" else "MicroG-RE:Updater"
 
     /** Automatic checks run at most once every [UPDATE_COOLDOWN_MS]; manual checks always run. */
     private const val UPDATE_COOLDOWN_MS = 24 * 60 * 60 * 1000L
@@ -534,6 +535,15 @@ object AppUpdater {
         return fetchLatestUpdateFromRepo(RELEASES_URL, UPDATE_URL, noiconVariant, includePrerelease, strictVariantMatch)
     }
 
+    private fun matchesReleaseTag(rawTag: String): Boolean {
+        val lower = rawTag.trim().lowercase()
+        return if (isOriginalMicrog) {
+            lower.startsWith("microg-original-")
+        } else {
+            !lower.startsWith("microg-original-")
+        }
+    }
+
     private fun fetchLatestUpdateFromRepo(
         releasesUrl: String,
         latestUrl: String,
@@ -542,13 +552,13 @@ object AppUpdater {
         strictVariantMatch: Boolean = false
     ): UpdateInfo? {
         return try {
-            if (includePrerelease || strictVariantMatch) {
-                val text = httpGet("$releasesUrl?per_page=20") ?: return null
+            // Always scan the release list on multi-tag repositories so separate tags
+            // (microg-re-v* vs microg-original-hw-v*) resolve independently.
+            val useListScan = includePrerelease || strictVariantMatch || releasesUrl == PRIMARY_RELEASES_URL
+            if (useListScan) {
+                val text = httpGet("$releasesUrl?per_page=25") ?: return null
                 val all = Gson().fromJson(text, JsonArray::class.java) ?: return null
                 all.asSequence()
-                    // The list is only fetched to find a matching variant, but it still has to
-                    // respect the channel: a newer pre-release outranks the latest stable, so
-                    // without this a stable build is quietly offered a pre-release.
                     .filter { includePrerelease || it.asJsonObject?.get("prerelease")?.asBoolean != true }
                     .mapNotNull { el ->
                         el.asJsonObject?.let { parseReleaseObject(it, noiconVariant, strictVariantMatch) }
@@ -575,6 +585,7 @@ object AppUpdater {
     ): UpdateInfo? {
         return try {
             val tag = root.get("tag_name")?.asString ?: return null
+            if (!matchesReleaseTag(tag)) return null
             val assets = root.getAsJsonArray("assets") ?: return null
             val asset = pickAsset(assets, noiconVariant, strictVariantMatch) ?: return null
             UpdateInfo().apply {
@@ -654,7 +665,20 @@ object AppUpdater {
     // Version comparison
     // -----------------------------------------------------------------------------------
 
-    private fun normalizeVersion(v: String): String = v.trim().removePrefix("v").removePrefix("V")
+    private fun normalizeVersion(v: String): String {
+        var s = v.trim()
+        for (prefix in listOf("microg-original-hw-", "microg-original-", "microg-re-")) {
+            if (s.startsWith(prefix, ignoreCase = true)) {
+                s = s.substring(prefix.length)
+                break
+            }
+        }
+        s = s.removePrefix("v").removePrefix("V")
+        if (s.endsWith("-hw", ignoreCase = true)) {
+            s = s.dropLast(3)
+        }
+        return s
+    }
 
     /** Parses a version into (core numbers, pre-release identifiers) per semver. */
     private fun semverParts(v: String): Pair<List<Int>, List<String>> {
@@ -905,6 +929,8 @@ object AppUpdater {
                     for (el in all) {
                         val root = el.asJsonObject ?: continue
                         val assets = root.getAsJsonArray("assets") ?: continue
+                        val tag = root.get("tag_name")?.asString ?: continue
+                        if (!matchesReleaseTag(tag)) continue
                         val match = assets.mapNotNull { it.asJsonObject }.firstOrNull { obj ->
                             val name = obj.get("name")?.asString?.lowercase() ?: return@firstOrNull false
                             if (!matchesBuildEdition(name)) return@firstOrNull false

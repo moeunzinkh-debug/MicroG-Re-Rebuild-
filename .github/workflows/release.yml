@@ -3,18 +3,29 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      publish_github_release:
-        description: "Create/update a GitHub Release with MicroG-RE + Original microG Huawei APKs"
+      edition:
+        description: "Edition tag to create & publish (both | microg-re | microg-original-hw)"
         required: false
-        default: true
-        type: boolean
+        default: "both"
+        type: choice
+        options:
+          - both
+          - microg-re
+          - microg-original-hw
+      tag_suffix:
+        description: "Optional hotfix tag suffix (e.g. -fix1)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    name: "Release & Debug APK build (MicroG-RE + Huawei Original)"
+  release-microg-re:
+    name: "[Tag: microg-re-v*] Release & Debug APKs"
+    if: inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-re'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     env:
       GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
 
@@ -34,7 +45,7 @@ jobs:
         run: python3 scripts/check_sensitive_manifest_permissions.py
 
       - name: "Setup Java"
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@v6.0.1
         with:
           distribution: "temurin"
           java-version: "17"
@@ -69,33 +80,36 @@ jobs:
           echo "DEBUG_KEYSTORE_ENTRY_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
 
           if [[ -n "$SECRET_KEYSTORE_B64" && -n "$SECRET_KEYSTORE_ALIAS" && -n "$SECRET_KEYSTORE_PASS" ]]; then
-            echo "Using repository secret KEYSTORE_B64 for Release signing."
             echo "$SECRET_KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEY_DIR/custom-release.keystore"
             echo "KEYSTORE_FILE=$KEY_DIR/custom-release.keystore" >> "$GITHUB_ENV"
             echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
           else
-            echo "No KEYSTORE_B64 secret configured; using generated 4096-bit RSA PKCS12 keystore."
             echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
             echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
           fi
 
-      - name: "Build MicroG-RE & Original microG Huawei APKs"
-        id: version
+      - name: "Build MicroG-RE Release & Debug APKs"
+        id: meta
+        env:
+          TAG_SUFFIX: ${{ inputs.tag_suffix }}
         run: |
-          mkdir -p dist
+          set -o pipefail
+          mkdir -p dist-re
           VER="$(grep -oP 'def reGmsVersionName = "\K[^"]+' build.gradle)"
+          TAG_NAME="microg-re-v${VER}${TAG_SUFFIX}"
           IS_PRE="false"
           if [[ "$VER" == *-* ]]; then
             IS_PRE="true"
           fi
-          echo "tag=$VER" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "prerelease=$IS_PRE" >> "$GITHUB_OUTPUT"
 
-          build_re_apk() {
+          build_re() {
             local target="$1"
             local lower="$2"
             local extra_args="$3"
@@ -103,69 +117,198 @@ jobs:
             local out_dir="play-services-core/build/outputs/apk/default/${lower}"
             rm -rf "$out_dir"
             # shellcheck disable=SC2086
-            ./gradlew :play-services-core:assembleDefault${target} $extra_args
+            if ! ./gradlew :play-services-core:assembleDefault${target} $extra_args --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle-re.log"; then
+              ERR_MSG="$(grep -E "FAILURE:|What went wrong:|^\* |^> |Exception|Error|e: " "$RUNNER_TEMP/gradle-re.log" | head -n 20 | sed -E 's/(storePassword|keyPassword)=[^,}]*/\1=REDACTED/g' | tr '\n' ' ')"
+              echo "::error title=MicroG-RE Build Error (${dest_name})::${ERR_MSG}"
+              exit 1
+            fi
             local built_apk
             built_apk="$(find "$out_dir" -maxdepth 2 -name '*.apk' | head -n 1)"
-            cp "$built_apk" "dist/$dest_name"
+            cp "$built_apk" "dist-re/$dest_name"
           }
 
-          build_hw_apk() {
+          # Release variants
+          build_re "Release" "release" "-Pabi=arm64-v8a" "microg-${VER}-icon-arm64-v8a.apk"
+          build_re "Release" "release" "-Pabi=armeabi-v7a" "microg-${VER}-icon-armeabi-v7a.apk"
+          build_re "Release" "release" "" "microg-${VER}.apk"
+          build_re "Release" "release" "-PnoIcon=true -Pabi=arm64-v8a" "microg-${VER}-noicon-arm64-v8a.apk"
+          build_re "Release" "release" "-PnoIcon=true -Pabi=armeabi-v7a" "microg-${VER}-noicon-armeabi-v7a.apk"
+          build_re "Release" "release" "-PnoIcon=true" "microg-${VER}-noicon.apk"
+
+          # Debug variants
+          build_re "Debug" "debug" "-Pabi=arm64-v8a" "microg-${VER}-debug-icon-arm64-v8a.apk"
+          build_re "Debug" "debug" "" "microg-${VER}-debug.apk"
+
+      - name: "Verify MicroG-RE APKs & compute SHA-256"
+        run: |
+          bash scripts/verify_built_apk.sh dist-re/*.apk
+          (cd dist-re && sha256sum *.apk > SHA256SUMS-microg-re.txt && cat SHA256SUMS-microg-re.txt)
+          SUMMARY="Tag=${{ steps.meta.outputs.tag }} | $(cd dist-re && ls -lh *.apk | awk '{print $9 "(" $5 ")"}' | tr '\n' ' ') | SHA256: $(tr '\n' '; ' < dist-re/SHA256SUMS-microg-re.txt)"
+          echo "::notice title=[Tag: ${{ steps.meta.outputs.tag }}] MicroG-RE Verified::${SUMMARY}"
+
+      - name: "Create Git Tag & Publish MicroG-RE GitHub Release"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: "[MicroG-RE] v${{ steps.meta.outputs.version }} — Patched Apps (ReVanced / Morphe) [Debug & Release]"
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          body: |
+            ## [MicroG-RE] `v${{ steps.meta.outputs.version }}` (`app.revanced.android.gms`)
+            - **Dedicated Tag**: `${{ steps.meta.outputs.tag }}` (Logcat debug prefix: `MicroG-RE:*`)
+            - **For**: Patched apps (YouTube ReVanced / Morphe, YT Music, Reddit, TikTok, Google Photos)
+            - **Security**: Signed with RSA 4096-bit (`SHA256withRSA`) v1 + v2 + v3; `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`, `RECEIVE_SMS`, `READ_SMS` removed.
+            - **Recommended APK (64-bit phones)**: `microg-${{ steps.meta.outputs.version }}-icon-arm64-v8a.apk`
+          files: |
+            dist-re/*.apk
+            dist-re/SHA256SUMS-microg-re.txt
+
+  release-microg-original-hw:
+    name: "[Tag: microg-original-hw-v*] Release & Debug APKs"
+    if: inputs.edition == '' || inputs.edition == 'both' || inputs.edition == 'microg-original-hw'
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
+
+    steps:
+      - name: "Free disk space"
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/go
+          df -h
+
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: "Check sensitive install permissions"
+        run: python3 scripts/check_sensitive_manifest_permissions.py
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: "Setup Gradle"
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
+
+      - name: "Prepare v1+v2+v3 signing keystores"
+        env:
+          SECRET_KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          SECRET_KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          SECRET_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          SECRET_KEY_PASS: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
+        run: |
+          KEY_DIR="$RUNNER_TEMP/keystore"
+          mkdir -p "$KEY_DIR"
+
+          DBG_PASS="$(openssl rand -hex 16)"
+          REL_PASS="$(openssl rand -hex 16)"
+          KEYSTORE_DIR="$KEY_DIR" \
+          KEYSTORE_PASSWORD="$REL_PASS" \
+          KEYSTORE_ENTRY_ALIAS="microg-release" \
+          DEBUG_KEYSTORE_PASSWORD="$DBG_PASS" \
+          DEBUG_KEYSTORE_ENTRY_ALIAS="microg-dev" \
+          bash scripts/generate_keystore.sh >/dev/null
+
+          echo "DEBUG_KEYSTORE_FILE=$KEY_DIR/debug.p12" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_ALIAS=microg-dev" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+
+          if [[ -n "$SECRET_KEYSTORE_B64" && -n "$SECRET_KEYSTORE_ALIAS" && -n "$SECRET_KEYSTORE_PASS" ]]; then
+            echo "$SECRET_KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEY_DIR/custom-release.keystore"
+            echo "KEYSTORE_FILE=$KEY_DIR/custom-release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          else
+            echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+          fi
+
+      - name: "Build MicroG Original Huawei (-hw) Release & Debug APKs"
+        id: meta
+        env:
+          TAG_SUFFIX: ${{ inputs.tag_suffix }}
+        run: |
+          set -o pipefail
+          mkdir -p dist-hw
+          VER="$(grep -oP 'def origGmsVersionName = "\K[^"]+' build.gradle)"
+          TAG_NAME="microg-original-hw-v${VER}${TAG_SUFFIX}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+          build_hw() {
             local gradle_task="$1"
             local out_dir="$2"
             local extra_args="$3"
             local dest_name="$4"
             rm -rf "$out_dir"
             # shellcheck disable=SC2086
-            ./gradlew "$gradle_task" -PbasePackageName=com.google $extra_args
+            if ! ./gradlew "$gradle_task" -PbasePackageName=com.google $extra_args --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle-hw.log"; then
+              ERR_MSG="$(grep -E "FAILURE:|What went wrong:|^\* |^> |Exception|Error|e: " "$RUNNER_TEMP/gradle-hw.log" | head -n 20 | sed -E 's/(storePassword|keyPassword)=[^,}]*/\1=REDACTED/g' | tr '\n' ' ')"
+              echo "::error title=MicroG-Original-HW Build Error (${dest_name})::${ERR_MSG}"
+              exit 1
+            fi
             local built_apk
             built_apk="$(find "$out_dir" -maxdepth 2 -name '*.apk' | head -n 1)"
-            cp "$built_apk" "dist/$dest_name"
+            cp "$built_apk" "dist-hw/$dest_name"
           }
 
-          # MicroG-RE Release & Debug variants
-          build_re_apk "Release" "release" "" "microg-${VER}.apk"
-          build_re_apk "Release" "release" "-Pabi=arm64-v8a" "microg-${VER}-icon-arm64-v8a.apk"
-          build_re_apk "Release" "release" "-Pabi=armeabi-v7a" "microg-${VER}-icon-armeabi-v7a.apk"
-          build_re_apk "Release" "release" "-PnoIcon=true" "microg-${VER}-noicon.apk"
-          build_re_apk "Release" "release" "-PnoIcon=true -Pabi=arm64-v8a" "microg-${VER}-noicon-arm64-v8a.apk"
-          build_re_apk "Release" "release" "-PnoIcon=true -Pabi=armeabi-v7a" "microg-${VER}-noicon-armeabi-v7a.apk"
-          build_re_apk "Debug" "debug" "" "microg-${VER}-debug.apk"
-          build_re_apk "Debug" "debug" "-Pabi=arm64-v8a" "microg-${VER}-debug-icon-arm64-v8a.apk"
+          # Release APKs (GMS + Companion co-signed with identical release.p12)
+          build_hw ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-arm64-v8a.apk"
+          build_hw ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-armeabi-v7a.apk"
+          build_hw ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "" "com.google.android.gms-255070302-hw.apk"
+          build_hw ":vending-app:assembleHuaweiRelease" "vending-app/build/outputs/apk/huawei/release" "" "com.android.vending-84507030-hw.apk"
 
-          # Free intermediate default build outputs before Huawei builds
-          rm -rf play-services-core/build
+          # Debug APKs (GMS + Companion co-signed with identical debug.p12)
+          build_hw ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-debug-arm64-v8a.apk"
+          build_hw ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-debug-armeabi-v7a.apk"
+          build_hw ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "" "com.google.android.gms-255070302-hw-debug.apk"
+          build_hw ":vending-app:assembleHuaweiDebug" "vending-app/build/outputs/apk/huawei/debug" "" "com.android.vending-84507030-hw-debug.apk"
 
-          # Original microG Huawei (-hw) Release & Debug + Companion FakeStore (-hw)
-          build_hw_apk ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-arm64-v8a.apk"
-          build_hw_apk ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-armeabi-v7a.apk"
-          build_hw_apk ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "" "com.google.android.gms-255070302-hw.apk"
-          build_hw_apk ":vending-app:assembleHuaweiRelease" "vending-app/build/outputs/apk/huawei/release" "" "com.android.vending-84507030-hw.apk"
-
-          build_hw_apk ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-debug-arm64-v8a.apk"
-          build_hw_apk ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-debug-armeabi-v7a.apk"
-          build_hw_apk ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "" "com.google.android.gms-255070302-hw-debug.apk"
-          build_hw_apk ":vending-app:assembleHuaweiDebug" "vending-app/build/outputs/apk/huawei/debug" "" "com.android.vending-84507030-hw-debug.apk"
-
-      - name: "Verify signatures & permissions and generate SHA256SUMS"
+      - name: "Verify MicroG Original Huawei APKs & co-signing certificates"
         run: |
-          bash scripts/verify_built_apk.sh dist/*.apk
-          (cd dist && sha256sum *.apk > SHA256SUMS.txt && ls -lh && cat SHA256SUMS.txt)
+          bash scripts/verify_built_apk.sh dist-hw/*.apk
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
 
-      - name: "Upload APKs artifact"
-        uses: actions/upload-artifact@v7
-        with:
-          name: MicroG-RE-and-Huawei-${{ steps.version.outputs.tag }}-APKs
-          if-no-files-found: error
-          path: dist/*
+          REL_GMS_CERT="$("$APKSIGNER" verify --print-certs dist-hw/com.google.android.gms-255070302-hw-arm64-v8a.apk | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
+          REL_VEND_CERT="$("$APKSIGNER" verify --print-certs dist-hw/com.android.vending-84507030-hw.apk | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
+          DBG_GMS_CERT="$("$APKSIGNER" verify --print-certs dist-hw/com.google.android.gms-255070302-hw-debug-arm64-v8a.apk | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
+          DBG_VEND_CERT="$("$APKSIGNER" verify --print-certs dist-hw/com.android.vending-84507030-hw-debug.apk | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
 
-      - name: "Publish GitHub Release"
-        if: ${{ inputs.publish_github_release }}
+          if [[ -z "$REL_GMS_CERT" || "$REL_GMS_CERT" != "$REL_VEND_CERT" || -z "$DBG_GMS_CERT" || "$DBG_GMS_CERT" != "$DBG_VEND_CERT" ]]; then
+            echo "::error title=Huawei Certificate Mismatch::REL($REL_GMS_CERT vs $REL_VEND_CERT) DBG($DBG_GMS_CERT vs $DBG_VEND_CERT)"
+            exit 1
+          fi
+
+          (cd dist-hw && sha256sum *.apk > SHA256SUMS-microg-original-hw.txt && cat SHA256SUMS-microg-original-hw.txt)
+          SUMMARY="Tag=${{ steps.meta.outputs.tag }} | RelCert=${REL_GMS_CERT} | $(cd dist-hw && ls -lh *.apk | awk '{print $9 "(" $5 ")"}' | tr '\n' ' ') | SHA256: $(tr '\n' '; ' < dist-hw/SHA256SUMS-microg-original-hw.txt)"
+          echo "::notice title=[Tag: ${{ steps.meta.outputs.tag }}] MicroG-Original-HW Verified::${SUMMARY}"
+
+      - name: "Create Git Tag & Publish MicroG Original Huawei GitHub Release"
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: MicroG-RE ${{ steps.version.outputs.tag }} + Original microG Huawei (-hw)
-          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: "[MicroG-Original-HW] v${{ steps.meta.outputs.version }}-hw — Huawei All Models (Nova 4e MAR-AL00 / HarmonyOS 3.0.0+) [Debug & Release]"
+          prerelease: false
+          body: |
+            ## [MicroG-Original-HW] `v${{ steps.meta.outputs.version }}-hw` (`com.google.android.gms` + `com.android.vending`)
+            - **Dedicated Tag**: `${{ steps.meta.outputs.tag }}` (Logcat debug prefix: `MicroG-Orig:*`)
+            - **Supported Huawei Models**: Huawei Nova 4e (`MAR-AL00`, Kirin 710, HarmonyOS 3.0.0) & all Huawei / Honor EMUI 8–15 & HarmonyOS 2.0 / 3.0.0 / 3.1 / 4.0 / 4.2 / 4.3 phones & tablets (`minSdk 21`, `targetSdk 34`).
+            - **Security**: Co-signed with identical RSA 4096-bit (`SHA256withRSA`) v1 + v2 + v3 key across GMS & Companion; `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`, `RECEIVE_SMS`, `READ_SMS` removed.
+            - **Recommended Pair for Huawei Nova 4e (`MAR-AL00`) & 64-bit Huawei phones**:
+              1. `com.google.android.gms-255070302-hw-arm64-v8a.apk` (or Universal `com.google.android.gms-255070302-hw.apk`)
+              2. `com.android.vending-84507030-hw.apk`
           files: |
-            dist/*.apk
-            dist/SHA256SUMS.txt
-          generate_release_notes: true
+            dist-hw/*.apk
+            dist-hw/SHA256SUMS-microg-original-hw.txt

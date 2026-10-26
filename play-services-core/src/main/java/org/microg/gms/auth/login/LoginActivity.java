@@ -100,7 +100,7 @@ public class LoginActivity extends AssistantActivity {
     public static final String EXTRA_RE_AUTH_ACCOUNT = "re_auth_account";
     public static final int STATUS_BAR_DISABLE_BACK = 0x00400000;
 
-    private static final String TAG = "GmsAuthLoginBrowser";
+    private static final String TAG = "com.google".equals(BuildConfig.BASE_PACKAGE_NAME) ? "MicroG-Orig:Login" : "MicroG-RE:Login";
     private static final String EMBEDDED_SETUP_URL = "https://accounts.google.com/EmbeddedSetup";
     private static final String EMBEDDED_RE_AUTH_URL = "https://accounts.google.com/embedded/reauth/v2/android";
     private static final String PROGRAMMATIC_AUTH_URL = "https://accounts.google.com/o/oauth2/programmatic_auth";

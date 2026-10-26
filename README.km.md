@@ -85,7 +85,43 @@ Repository នេះបង្កើត APK ចំនួន **២ ប្រព័
 
 ---
 
-## ៥. របៀប Build លើកុំព្យូទ័រផ្ទាល់ (JDK 17 + Android SDK 36)
+## ៥. ការបែងចែក Tag ដាច់ដោយឡែក (Separate Git Tags, Release Channels & Logcat Tags) សម្រាប់ងាយស្រួល Debug និង Fix
+
+ដើម្បីឱ្យការត្រួតពិនិត្យកំហុស (Debug) និងការកែប្រែបញ្ហា (Fix) រវាង **MicroG-RE** និង **MicroG Original (Huawei)** ដាច់ស្រឡះពីគ្នា មិនច្រឡំគ្នា ប្រព័ន្ធត្រូវបានបែងចែក Tag ជា **៤ កម្រិត**៖
+
+### ក. Git Tags & GitHub Releases ដាច់ដោយឡែកពីគ្នា
+| ប្រភេទកម្មវិធី | ទម្រង់ Git Tag (Release Tag) | Workflow សម្រាប់ Build ដាច់ដោយឡែក | ឯកសារ APK ក្នុង Release |
+|---|---|---|---|
+| **MicroG-RE** (`app.revanced.android.gms`) | **`microg-re-v7.3.0-dev.2`** (`microg-re-v*`) | `.github/workflows/tag_microg_re.yml` | មានតែ `microg-7.3.0-dev.2*.apk` + `SHA256SUMS-microg-re.txt` |
+| **MicroG Original Huawei** (`com.google.android.gms` + `com.android.vending`) | **`microg-original-hw-v0.3.17.255070`** (`microg-original-hw-v*`) | `.github/workflows/tag_microg_original_hw.yml` | មានតែ `com.google.android.gms-*-hw*.apk` + `com.android.vending-*-hw*.apk` + `SHA256SUMS-microg-original-hw.txt` |
+
+- **AppUpdater ដាច់តាម Tag Channel**៖ `MicroG-RE` ពិនិត្យតែ Release Tag ដែលផ្ដើមដោយ `microg-re-v*` រីឯ `MicroG Original Huawei` ពិនិត្យតែ Release Tag ដែលផ្ដើមដោយ `microg-original-hw-v*` ប៉ុណ្ណោះ។
+
+### ខ. Logcat Debug Tags ដាច់ដោយឡែក (ពេលដំឡើងទាំង ២ លើទូរស័ព្ទតែមួយ)
+នៅពេលដំឡើងទាំង ២ នៅលើទូរស័ព្ទ Huawei តែមួយ (ឧ. Nova 4e `MAR-AL00`) អ្នកអាចចាប់យក Log ដាច់ដោយឡែកភ្លាមៗតាម `adb logcat`៖
+
+```bash
+# មើល Log តែខាង MicroG Original (Huawei) ប៉ុណ្ណោះ (Login, Auth, Spoof, HwSig, Updater)៖
+adb logcat | grep "MicroG-Orig:"
+
+# មើល Log តែសេវា Huawei Signature Spoofing (SignatureService / InitProvider / InitReceiver)៖
+adb logcat -s MicroG-Orig:HwSig MicroG-Orig:HwInit MicroG-Orig:HwBoot
+
+# មើល Log តែខាង MicroG-RE (ReVanced / Morphe) ប៉ុណ្ណោះ៖
+adb logcat | grep "MicroG-RE:"
+```
+
+នៅក្នុងផ្ទាំង **Settings → About** ក៏បង្ហាញស្លាកសម្គាល់ច្បាស់លាស់ដែរ៖
+- `7.3.0-dev.2 [MicroG-RE]`
+- `0.3.17.255070-hw [MicroG-Original-HW]`
+
+### គ. របៀបបញ្ចេញកំណែជួសជុល (Hotfix Tag) ដាច់ដោយឡែក
+- កែបញ្ហាតែខាង **Huawei Original**៖ បង្កើត Tag ថ្មីឧ. `microg-original-hw-v0.3.17.255071` (ឬចុច Run workflow `Release` → ជ្រើស `edition = microg-original-hw`)។
+- កែបញ្ហាតែខាង **MicroG-RE**៖ បង្កើត Tag ថ្មីឧ. `microg-re-v7.3.0-dev.3` (ឬចុច Run workflow `Release` → ជ្រើស `edition = microg-re`)។
+
+---
+
+## ៦. របៀប Build លើកុំព្យូទ័រផ្ទាល់ (JDK 17 + Android SDK 36)
 
 ```bash
 # 1. បង្កើត Keystore RSA 4096-bit (ប្រើរួមគ្នាសម្រាប់ GMS និង Vending Companion)
