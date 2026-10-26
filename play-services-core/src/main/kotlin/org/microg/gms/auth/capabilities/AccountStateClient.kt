@@ -13,7 +13,6 @@ import org.microg.gms.auth.capabilities.proto.AccountStateRequestHeader
 import org.microg.gms.auth.capabilities.proto.AccountStateResponse
 import org.microg.gms.checkin.LastCheckinInfo
 import org.microg.gms.common.Constants
-import org.microg.gms.common.PackageUtils
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -45,13 +44,11 @@ class AccountStateClient(private val context: Context) {
         val token = fetchAccessToken(account)
             ?: throw IOException("couldn't fetch accessToken for AANG scope")
 
-        val certSha1 = PackageUtils.firstSignatureDigest(context, Constants.GMS_PACKAGE_NAME)
-            ?.lowercase()
-            ?: throw IOException("no signature for ${Constants.GMS_PACKAGE_NAME}")
+        val certSha1 = Constants.GMS_PACKAGE_SIGNATURE_SHA1.lowercase()
 
         val request = AccountStateRequest(
             requestHeader = AccountStateRequestHeader(
-                packageName = Constants.GMS_PACKAGE_NAME,
+                packageName = Constants.GOOGLE_GMS_PACKAGE_NAME,
                 appCertSha1Hex = certSha1,
             )
         )
@@ -63,7 +60,7 @@ class AccountStateClient(private val context: Context) {
             doOutput = true
             setRequestProperty("Content-Type", "application/x-protobuf")
             setRequestProperty("Authorization", "Bearer $token")
-            setRequestProperty("app", Constants.GMS_PACKAGE_NAME)
+            setRequestProperty("app", Constants.GOOGLE_GMS_PACKAGE_NAME)
             setRequestProperty("device", java.lang.Long.toHexString(LastCheckinInfo.read(context).androidId))
             setRequestProperty("gmsversion", Constants.GMS_VERSION_CODE.toString())
             setRequestProperty("gmscoreFlow", GMSCORE_FLOW)
@@ -86,6 +83,7 @@ class AccountStateClient(private val context: Context) {
     private fun fetchAccessToken(account: Account): String? {
         return try {
             val authManager = AuthManager(context, account.name, Constants.GMS_PACKAGE_NAME, ACCOUNT_STATE_SCOPE)
+            authManager.isGmsApp = true
             authManager.packageSignature = Constants.GMS_PACKAGE_SIGNATURE_SHA1
             authManager.requestAuth(false).auth
         } catch (e: Exception) {

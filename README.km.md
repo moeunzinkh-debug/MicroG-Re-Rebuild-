@@ -239,6 +239,7 @@ adb install org.microg.android.gms-255070302-personal-arm64-v8a.apk
 | Sign-In `com.google.android.gms.auth.api.signin.service.START` + `GOOGLE_SIGN_IN` | មានតែ namespaced | ✅ Personal ចាប់ Google Sign-In intent (implicit) |
 | Games `com.google.android.gms.games.service.START` | មានតែ namespaced | ✅ Personal ចាប់ Google Play Games intent (implicit) |
 | Location `com.google.android.location.internal.GoogleLocationManagerService.START` | មានតែ namespaced | ✅ គ្រប់ flavor (official name + namespaced) |
+| Auth/Checkin/GCM ប្រាប់ Google ថាជា `com.google.android.gms` | Personal ប្រាប់ថាជា `org.microg.android.gms` → Google បដិសេធ (`UNREGISTERED_ON_API_CONSOLE`) | ✅ `appIsGms()` + GCM/CryptAuth/AccountState ប្រើអត្តសញ្ញាណ official លើ **បណ្តាញ** (package ដំឡើងនៅតែ `org.microg.android.gms` ដើម្បីកុំទាស់ official) |
 
 ### អ្វីដែល **នៅតែ** ត្រូវការ 🔵 Original-HW / official `-hw`
 Client library របស់ Google សម័យថ្មី **តែងតែ** `intent.setPackage("com.google.android.gms")`។ Intent-filter alias មិនអាចបញ្ឆោត `setPackage` បានទេ — មានតែ app ដែលដំឡើងជា `com.google.android.gms` (🔵 `-hw` ឬ official) ទើប bind បាន។

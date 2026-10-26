@@ -124,6 +124,7 @@ class GcmInGmsService : LifecycleService() {
         Log.d(TAG, "updateGroupsWithAccount: account: ${account.name}")
         val authManager = AuthManager(this, account.name, Constants.GMS_PACKAGE_NAME, GMS_GCM_OAUTH_SERVICE).apply {
             setItCaveatTypes("2")
+            isGmsApp = true
         }
         val authsToken = runCatching { withContext(Dispatchers.IO) { authManager.requestAuth(true) }.parseAuthsToken() }.getOrNull() ?: return
         val extras = Bundle().apply {
@@ -186,7 +187,7 @@ class GcmInGmsService : LifecycleService() {
         val regId = withContext(Dispatchers.IO) {
             val request = RegisterRequest().build(context)
                 .checkin(LastCheckinInfo.read(context))
-                .app(Constants.GMS_PACKAGE_NAME, Constants.GMS_PACKAGE_SIGNATURE_SHA1, BuildConfig.VERSION_CODE)
+                .app(Constants.GOOGLE_GMS_PACKAGE_NAME, Constants.GMS_PACKAGE_SIGNATURE_SHA1, BuildConfig.VERSION_CODE)
                 .sender(GMS_GCM_REGISTER_SENDER)
                 .extraParam("subscription", GMS_GCM_REGISTER_SUBSCRIPTION)
                 .extraParam("X-subscription", GMS_GCM_REGISTER_SUBSCRIPTION)
