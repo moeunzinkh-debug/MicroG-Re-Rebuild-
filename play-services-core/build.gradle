@@ -233,9 +233,9 @@ android {
                 keyAlias debugKeyAlias
                 keyPassword debugKeyPass
             }
-            v1SigningEnabled true
-            v2SigningEnabled true
-            v3SigningEnabled true
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
         if (hasReleaseKeystore) {
             releaseCustom {
@@ -243,9 +243,9 @@ android {
                 storePassword releaseStorePass
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPass
-                v1SigningEnabled true
-                v2SigningEnabled true
-                v3SigningEnabled true
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }

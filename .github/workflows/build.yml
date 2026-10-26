@@ -118,7 +118,7 @@ jobs:
             rm -rf "$OUT_DIR"
             # shellcheck disable=SC2086
             if ! ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"; then
-              ERR_MSG="$(grep -E "FAILURE:|What went wrong:|^\* |^> |Exception|Error|e: " "$RUNNER_TEMP/gradle.log" | head -n 20 | tr '\n' ' ')"
+              ERR_MSG="$(grep -E "FAILURE:|What went wrong:|^\* |^> |Exception|Error|e: " "$RUNNER_TEMP/gradle.log" | head -n 20 | sed -E 's/(storePassword|keyPassword)=[^,}]*/\1=REDACTED/g' | tr '\n' ' ')"
               echo "::error title=Gradle Build Error (${dest_name})::${ERR_MSG}"
               exit 1
             fi
