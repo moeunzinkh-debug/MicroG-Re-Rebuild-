@@ -276,13 +276,24 @@ android {
             buildConfigField "String", "EDITION_TAG", "\"MicroG-Original-HW\""
             buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-original-hw-v\""
         }
+        "personal" {
+            dimension 'target'
+            versionNameSuffix "-personal"
+            matchingFallbacks = ['default']
+            buildConfigField "String", "EDITION_TAG", "\"MicroG-Personal\""
+            buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-personal-v\""
+        }
         "user" {
             dimension 'target'
             applicationId = "org.microg.gms"
             versionNameSuffix "-user"
             buildConfigField "String", "EDITION_TAG", "\"MicroG-User\""
             buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-user-v\""
-            manifestPlaceholders = [appLabel:"@string/limited_services_app_name", basePackageName:"org.microg"]
+            manifestPlaceholders = [
+                    appLabel           : "@string/limited_services_app_name",
+                    basePackageName    : "org.microg",
+                    launcherIconEnabled: (project.findProperty("noIcon") == "true") ? "false" : "true"
+            ]
             matchingFallbacks = ['default']
             resValue "string", "package_id", "org.microg.gms"
             // Account type must match AuthConstants.DEFAULT_ACCOUNT_TYPE, which is compiled

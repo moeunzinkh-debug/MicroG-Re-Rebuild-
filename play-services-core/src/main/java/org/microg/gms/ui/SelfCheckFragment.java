@@ -64,10 +64,11 @@ public class SelfCheckFragment extends AbstractSelfCheckFragment {
     @Override
     protected void prepareSelfCheckList(List<SelfCheckGroup> checks) {
         Context context = getContext();
-        if (!"com.google".equals(com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME)) {
+        String basePkg = com.google.android.gms.BuildConfig.BASE_PACKAGE_NAME;
+        if ("app.revanced".equals(basePkg)) {
             checks.add(new InstalledPatcherChecks());
         }
-        if (Objects.equals(context.getPackageName(), Constants.GMS_PACKAGE_NAME)) {
+        if ("com.google".equals(basePkg) && Objects.equals(context.getPackageName(), Constants.GMS_PACKAGE_NAME)) {
             checks.add(new RomSpoofSignatureChecks());
         }
         checks.add(new InstalledPackagesChecks());

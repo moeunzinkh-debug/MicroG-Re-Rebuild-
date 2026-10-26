@@ -70,6 +70,8 @@ object AppUpdater {
     private const val WEB_RELEASES_URL = "https://github.com/MorpheApp/MicroG-RE/releases"
     private val isOriginalMicrog: Boolean
         get() = BuildConfig.BASE_PACKAGE_NAME == "com.google"
+    private val isPersonalMicrog: Boolean
+        get() = BuildConfig.BASE_PACKAGE_NAME == "org.microg"
     private const val PREFS_NAME = "org.microg.gms_updater"
     private const val PREFS_IGNORED_VERSION = "ignored_version"
     private const val PREFS_LAST_CHECK = "last_check"
@@ -88,7 +90,11 @@ object AppUpdater {
     private const val USER_AGENT = "MicroG-RE-Updater"
     private const val TIMEOUT_MS = 15000
     private val TAG: String
-        get() = if (isOriginalMicrog) "MicroG-Orig:Updater" else "MicroG-RE:Updater"
+        get() = when {
+            isPersonalMicrog -> "MicroG-Personal:Updater"
+            isOriginalMicrog -> "MicroG-Orig:Updater"
+            else -> "MicroG-RE:Updater"
+        }
 
     /** Automatic checks run at most once every [UPDATE_COOLDOWN_MS]; manual checks always run. */
     private const val UPDATE_COOLDOWN_MS = 24 * 60 * 60 * 1000L
@@ -133,7 +139,7 @@ object AppUpdater {
     /** Opens [update] download URL in the system browser (no REQUEST_INSTALL_PACKAGES needed). */
     @JvmStatic
     fun runUpdateFlow(activity: Activity, update: UpdateInfo?) {
-        val fallback = if (isOriginalMicrog) PRIMARY_WEB_RELEASES_URL else WEB_RELEASES_URL
+        val fallback = if (isOriginalMicrog || isPersonalMicrog) PRIMARY_WEB_RELEASES_URL else WEB_RELEASES_URL
         val url = update?.assetUrl?.takeIf { it.isNotEmpty() } ?: fallback
         ensureUpdateNotificationPermission(activity)
         openDownloadInBrowser(activity, url)
@@ -531,16 +537,16 @@ object AppUpdater {
     ): UpdateInfo? {
         fetchLatestUpdateFromRepo(PRIMARY_RELEASES_URL, "$PRIMARY_RELEASES_URL/latest", noiconVariant, includePrerelease, strictVariantMatch)
             ?.let { return it }
-        if (isOriginalMicrog) return null
+        if (isOriginalMicrog || isPersonalMicrog) return null
         return fetchLatestUpdateFromRepo(RELEASES_URL, UPDATE_URL, noiconVariant, includePrerelease, strictVariantMatch)
     }
 
     private fun matchesReleaseTag(rawTag: String): Boolean {
         val lower = rawTag.trim().lowercase()
-        return if (isOriginalMicrog) {
-            lower.startsWith("microg-original-")
-        } else {
-            !lower.startsWith("microg-original-")
+        return when {
+            isPersonalMicrog -> lower.startsWith("microg-personal-")
+            isOriginalMicrog -> lower.startsWith("microg-original-")
+            else -> !lower.startsWith("microg-original-") && !lower.startsWith("microg-personal-")
         }
     }
 
@@ -612,10 +618,19 @@ object AppUpdater {
         if (assetLowerName.startsWith("com.android.vending") || assetLowerName.contains("companion-vending")) {
             return false
         }
+        if (assetLowerName.contains("-debug") != BuildConfig.DEBUG) {
+            return false
+        }
+        val isPersonalAsset = assetLowerName.startsWith("org.microg.android.gms") ||
+            assetLowerName.contains("-personal")
         val isHuaweiGmsAsset = assetLowerName.startsWith("com.google.android.gms") ||
             assetLowerName.contains("original-huawei") ||
             assetLowerName.contains("-hw")
-        return isHuaweiGmsAsset == isOriginalMicrog
+        return when {
+            isPersonalMicrog -> isPersonalAsset
+            isOriginalMicrog -> isHuaweiGmsAsset
+            else -> !isPersonalAsset && !isHuaweiGmsAsset
+        }
     }
 
     private fun pickAsset(
@@ -667,14 +682,16 @@ object AppUpdater {
 
     private fun normalizeVersion(v: String): String {
         var s = v.trim()
-        for (prefix in listOf("microg-original-hw-", "microg-original-", "microg-re-")) {
+        for (prefix in listOf("microg-personal-", "microg-original-hw-", "microg-original-", "microg-re-")) {
             if (s.startsWith(prefix, ignoreCase = true)) {
                 s = s.substring(prefix.length)
                 break
             }
         }
         s = s.removePrefix("v").removePrefix("V")
-        if (s.endsWith("-hw", ignoreCase = true)) {
+        if (s.endsWith("-personal", ignoreCase = true)) {
+            s = s.dropLast(9)
+        } else if (s.endsWith("-hw", ignoreCase = true)) {
             s = s.dropLast(3)
         }
         return s

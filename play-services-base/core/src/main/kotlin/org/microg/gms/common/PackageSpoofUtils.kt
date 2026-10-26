@@ -9,7 +9,11 @@ import org.microg.gms.base.core.BuildConfig
  * utilities to spoof package information
  */
 internal object PackageSpoofUtils {
-    private val TAG = if (BuildConfig.BASE_PACKAGE_NAME == "com.google") "MicroG-Orig:Spoof" else "MicroG-RE:Spoof"
+    private val TAG = when (BuildConfig.BASE_PACKAGE_NAME) {
+        "org.microg" -> "MicroG-Personal:Spoof"
+        "com.google" -> "MicroG-Orig:Spoof"
+        else -> "MicroG-RE:Spoof"
+    }
     private const val META_SPOOF_PACKAGE_NAME =
         "${BuildConfig.BASE_PACKAGE_NAME}.android.gms.SPOOFED_PACKAGE_NAME"
     private const val META_SPOOF_PACKAGE_SIGNATURE =

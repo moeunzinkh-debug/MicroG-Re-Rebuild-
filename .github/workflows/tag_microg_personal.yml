@@ -1,0 +1,143 @@
+name: "Tag Build: MicroG-Personal (Non-Play-Store)"
+
+on:
+  push:
+    tags:
+      - "microg-personal-v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name to publish (e.g. microg-personal-v0.3.17.255070)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish-personal:
+    name: "[Tag: microg-personal-v*] Build & Publish Personal Non-Play-Store APKs"
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
+
+    steps:
+      - name: "Free disk space"
+        run: |
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/go
+
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: "Check sensitive install permissions"
+        run: python3 scripts/check_sensitive_manifest_permissions.py
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: "Setup Gradle"
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
+
+      - name: "Prepare Personal Self-Signed Keystores"
+        env:
+          SECRET_KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          SECRET_KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          SECRET_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          SECRET_KEY_PASS: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
+        run: |
+          KEY_DIR="$RUNNER_TEMP/keystore-personal"
+          mkdir -p "$KEY_DIR"
+          DBG_PASS="$(openssl rand -hex 16)"
+          REL_PASS="$(openssl rand -hex 16)"
+          KEYSTORE_DIR="$KEY_DIR" \
+          KEYSTORE_PASSWORD="$REL_PASS" \
+          KEYSTORE_ENTRY_ALIAS="microg-release" \
+          DEBUG_KEYSTORE_PASSWORD="$DBG_PASS" \
+          DEBUG_KEYSTORE_ENTRY_ALIAS="microg-dev" \
+          bash scripts/generate_keystore.sh >/dev/null
+
+          echo "DEBUG_KEYSTORE_FILE=$KEY_DIR/debug.p12" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_ALIAS=microg-dev" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+
+          if [[ -n "$SECRET_KEYSTORE_B64" && -n "$SECRET_KEYSTORE_ALIAS" && -n "$SECRET_KEYSTORE_PASS" ]]; then
+            echo "$SECRET_KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEY_DIR/custom-release.keystore"
+            echo "KEYSTORE_FILE=$KEY_DIR/custom-release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          else
+            echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+          fi
+
+      - name: "Build, Align, Self-Sign & Verify Personal Release + Debug APKs"
+        run: |
+          GMS_VC="$(grep -oP 'def ourGmsVersionCode = \K[0-9]+' build.gradle)"
+          mkdir -p dist-personal
+
+          build_one() {
+            local target="$1"
+            local lower="$2"
+            local extra="$3"
+            local out_name="$4"
+            local out_dir="play-services-core/build/outputs/apk/personal/${lower}"
+            rm -rf "$out_dir"
+            # shellcheck disable=SC2086
+            ./gradlew ":play-services-core:assemblePersonal${target}" -PbasePackageName=org.microg $extra
+            cp "$(find "$out_dir" -maxdepth 2 -name '*.apk' | head -n 1)" "dist-personal/$out_name"
+          }
+
+          build_one "Release" "release" "-Pabi=arm64-v8a" "org.microg.android.gms-${GMS_VC}-personal-arm64-v8a.apk"
+          build_one "Release" "release" "-Pabi=armeabi-v7a" "org.microg.android.gms-${GMS_VC}-personal-armeabi-v7a.apk"
+          build_one "Release" "release" "" "org.microg.android.gms-${GMS_VC}-personal.apk"
+          SIGN_KEY_PASS="$KEYSTORE_ENTRY_PASSWORD" bash scripts/sign_personal_apk.sh "$KEYSTORE_FILE" "$KEYSTORE_PASSWORD" "$KEYSTORE_ENTRY_ALIAS" \
+            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-arm64-v8a.apk" \
+            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-armeabi-v7a.apk" \
+            "dist-personal/org.microg.android.gms-${GMS_VC}-personal.apk"
+
+          build_one "Debug" "debug" "-Pabi=arm64-v8a" "org.microg.android.gms-${GMS_VC}-personal-debug-arm64-v8a.apk"
+          build_one "Debug" "debug" "-Pabi=armeabi-v7a" "org.microg.android.gms-${GMS_VC}-personal-debug-armeabi-v7a.apk"
+          build_one "Debug" "debug" "" "org.microg.android.gms-${GMS_VC}-personal-debug.apk"
+          SIGN_KEY_PASS="$DEBUG_KEYSTORE_ENTRY_PASSWORD" bash scripts/sign_personal_apk.sh "$DEBUG_KEYSTORE_FILE" "$DEBUG_KEYSTORE_PASSWORD" "$DEBUG_KEYSTORE_ENTRY_ALIAS" \
+            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-debug-arm64-v8a.apk" \
+            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-debug-armeabi-v7a.apk" \
+            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-debug.apk"
+
+          bash scripts/verify_built_apk.sh dist-personal/*.apk
+          (cd dist-personal && sha256sum *.apk > SHA256SUMS-microg-personal.txt)
+
+      - name: "Publish GitHub Release for microg-personal-v*"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          VER="$(grep -oP 'def origGmsVersionName = "\K[^"]+' build.gradle)"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "$INPUT_TAG" ]]; then
+            TAG_NAME="$INPUT_TAG"
+          else
+            TAG_NAME="microg-personal-v${VER}"
+          fi
+          TITLE="[MicroG-Personal] ${TAG_NAME#microg-personal-} — Standalone Personal Use (Not For Play Store)"
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" dist-personal/*.apk dist-personal/SHA256SUMS-microg-personal.txt --clobber
+          else
+            gh release create "$TAG_NAME" dist-personal/*.apk dist-personal/SHA256SUMS-microg-personal.txt \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --notes "Personal self-signed standalone microG build (\`org.microg.android.gms\`) — not for Play Store."
+          fi
