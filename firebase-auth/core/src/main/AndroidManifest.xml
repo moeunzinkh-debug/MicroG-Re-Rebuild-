@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ SPDX-FileCopyrightText: 2020, microG Project Team
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- SMS auto-read and display-overlay permissions are intentionally not requested.
+         Keep these capabilities out unless a feature explicitly requires them. -->
+
+    <application>
+        <service android:name="org.microg.gms.firebase.auth.FirebaseAuthService"
+                 android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.firebase.auth.api.gms.service.START" />
+            </intent-filter>
+        </service>
+        <activity
+            android:name="org.microg.gms.firebase.auth.ReCaptchaActivity"
+            android:exported="false"
+            android:process=":ui"
+            android:theme="@style/Theme.AppCompat.Light.Dialog.Alert.NoActionBar" />
+        <!-- // RE changes start
+        <service
+            android:name="org.microg.gms.firebase.auth.ReCaptchaOverlayService"
+            android:exported="false"
+            android:process=":ui" />
+        // RE changes end -->
+    </application>
+</manifest>
