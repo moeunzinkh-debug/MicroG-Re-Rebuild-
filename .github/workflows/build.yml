@@ -612,12 +612,13 @@ jobs:
           OUT_DIR="play-services-core/build/outputs/apk/personal/${LOWER_TARGET}"
           mkdir -p dist-personal dist-personal-arm64
 
+          : > "$RUNNER_TEMP/gradle-personal.log"
           build_personal_apk() {
             local extra_args="$1"
             local dest_name="$2"
             rm -rf "$OUT_DIR"
             # shellcheck disable=SC2086
-            if ! ./gradlew ":play-services-core:assemblePersonal${TARGET}" -PbasePackageName=org.microg $extra_args --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle-personal.log"; then
+            if ! ./gradlew ":play-services-core:assemblePersonal${TARGET}" -PbasePackageName=org.microg $extra_args --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/gradle-personal.log"; then
               ERR="$(grep -E 'FAILURE:|What went wrong:|^\* |Exception|Error:|error:' "$RUNNER_TEMP/gradle-personal.log" | tail -n 30 | tr '\n' ' ')"
               echo "::error title=Personal Gradle Build Failed (${dest_name})::${ERR}"
               exit 1
@@ -678,6 +679,13 @@ jobs:
             exit 1
           fi
 
+          ISOLATED_LINES="$(grep 'ISOLATE_MANIFEST' "$RUNNER_TEMP/gradle-personal.log" | sort -u | tr '\n' '; ' || true)"
+          if [[ -n "$ISOLATED_LINES" ]]; then
+            echo "::notice title=Isolated AAR Collisions (${{ matrix.target }})::${ISOLATED_LINES}"
+          else
+            echo "::notice title=Isolated AAR Collisions (${{ matrix.target }})::Zero non-prefixed AAR permissions/providers found"
+          fi
+
           CERT_SHA256="$("$APKSIGNER" verify --print-certs "$ARM64_APK" | grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' | head -n 1 | awk '{print $NF}')"
           (cd dist-personal && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
           (cd dist-personal-arm64 && sha256sum *.apk > SHA256SUMS.txt)
@@ -697,6 +705,51 @@ jobs:
           name: MicroG-Personal-All-Variants-${{ matrix.target }}
           path: dist-personal/*
           if-no-files-found: error
+
+  verify-side-by-side-isolation:
+    name: "Verify 0 Manifest Collisions Across MicroG-RE, Personal & Huawei APKs"
+    needs: [build, build-personal, build-huawei]
+    if: >-
+      (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'arena/')) &&
+      (inputs.edition == '' || inputs.edition == 'all')
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout sources"
+        uses: actions/checkout@v7
+
+      - name: "Download MicroG-RE ARM64 Release APK"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-RE-arm64-v8a-Release
+          path: check-apks/re
+
+      - name: "Download MicroG-Personal ARM64 Release APK"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-Personal-arm64-v8a-Release
+          path: check-apks/personal
+
+      - name: "Download MicroG-Original-HW ARM64 Release APK"
+        uses: actions/download-artifact@v7
+        with:
+          name: MicroG-Original-Huawei-arm64-v8a-Release
+          path: check-apks/hw
+
+      - name: "Verify Side-By-Side APK Manifest Isolation via aapt2 xmltree"
+        run: |
+          RE_APK="$(ls check-apks/re/microg-*-icon-arm64-v8a.apk | head -n 1)"
+          PERSONAL_APK="$(ls check-apks/personal/org.microg.android.gms-*-personal-arm64-v8a.apk | head -n 1)"
+          HW_APK="$(ls check-apks/hw/com.google.android.gms-*-hw-arm64-v8a.apk | head -n 1)"
+
+          if ! OUT="$(python3 scripts/verify_side_by_side_isolation.py "$RE_APK" "$PERSONAL_APK" "$HW_APK" 2>&1)"; then
+            echo "$OUT"
+            FLAT="$(echo "$OUT" | tr '\n' ' ')"
+            echo "::error title=Side-By-Side APK Collision Detected::${FLAT}"
+            exit 1
+          fi
+          echo "$OUT"
+          FLAT="$(echo "$OUT" | tr '\n' ' ')"
+          echo "::notice title=Side-By-Side APK Isolation Verified::${FLAT}"
 
   publish-tag-microg-personal:
     name: "[Tag: microg-personal-v*] Publish Git Tag & Release"
