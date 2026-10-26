@@ -167,26 +167,25 @@ patch ប្តូរ `com.google.android.gms` ក្នុង app ទៅជា�
 | App ត្រូវបានបំណះសម្រាប់ | ភ្ជាប់បានតែទៅ | ដំឡើងដោយ |
 |---|---|---|
 | `app.revanced.android.gms` | 🔴 MicroG-RE `7.3.0-dev.2` | Tag `microg-re-v7.3.0-dev.2` |
-| `org.microg.android.gms` | 🟢 microG Personal | Tag `microg-personal-v0.3.17.255070` |
-| `com.google.android.gms` | 🔵 Original microG Huawei (`-hw`) ឬ Play Services ពិត | Tag `microg-original-hw-v0.3.17.255070` |
+| `com.google.android.gms` | 🟢 **microG Personal** (APK តែមួយ) **ឬ** 🔵 Original-HW | Tag `microg-personal-v0.3.17.255070` |
 
-ដូច្នេះបើ app មួយត្រូវបានបំណះសម្រាប់ `app.revanced.android.gms` វានឹង**មិនភ្ជាប់**ទៅ `microG Personal` (`org.microg.android.gms`) ឡើយ ទោះដំឡើងទាំងពីរទន្ទឹមគ្នាក៏ដោយ — នេះជាដែនកំណត់របស់ Android ខ្លួនឯង មិនមែន bug របស់ microG ទេ។
+ដូច្នេះបើ YouTube/ReVanced ត្រូវបានបំណះសម្រាប់ `app.revanced.android.gms` វានឹង**មិនភ្ជាប់**ទៅ Personal ឡើយ — **បំណះឡើងវិញ** ជាមួយ `GmsCoreVendorGroupId = com.google`។
 
 ### អ្វីដែលបានបន្ថែមក្នុង build នេះ (Self-Check → **GMS compatibility**)
 
-1. បង្ហាញថា **build នេះឆ្លើយតបជា package អ្វី** (ឧ. `microG Personal (org.microg.android.gms)`).
+1. បង្ហាញថា **build នេះឆ្លើយតបជា package អ្វី** (ឧ. `microG Personal (com.google.android.gms)`)។
 2. បញ្ជី **GMS ទាំងអស់ដែលបានដំឡើងទន្ទឹមគ្នា** (MicroG-RE, Morphe GmsCore, microG Personal, Vanced microG, Play Services) ជាមួយ Chip ចុចបើក App Info។
 3. ស្កេនកម្មវិធីដែលបានបំណះទាំងអស់ (`*.morphe.android.*`, `*.revanced.android.*`, `*.rvx.android.*`, `*.vanced.android.*`, `anddea.youtube`, `bill.youtube`) ហើយអានពី DEX ថាតើវាត្រូវការ GMS package ណា៖
    - ✅ `YouTube is patched for MicroG-RE (this build)` → ត្រូវគ្នា។
    - ⚠️ `YouTube is patched for MicroG-RE (installed side by side)` → ត្រូវគ្នាដែរ ព្រោះ build នោះដំឡើងនៅ។
-   - ❌ `YouTube is patched for MicroG-RE, which is not installed` → ដំឡើង tag `microg-re-v7.3.0-dev.2` ឬបំណះឡើងវិញជាមួយ `GmsCoreVendorGroupId = org.microg`។
+   - ❌ `YouTube is patched for MicroG-RE, which is not installed` → បំណះឡើងវិញជាមួយ `GmsCoreVendorGroupId = com.google` (សម្រាប់ 🟢 Personal)។
 4. លទ្ធផលស្កេនត្រូវបាន **Cache** តាមទំហំ/កាលបរិច្ឆេទ APK ដូច្នេះបើក Self-Check លើកទី ២ ភ្លាមៗ (ស្កេនតែ APK ដែលបានបំណះ មិនស្កេន app ទាំងអស់)។
 
 ### របៀបបំណះឲ្យត្រូវនឹង build ដែលអ្នកប្រើ
 
 - **ReVanced / Piko / RVX Manager**: ក្នុង patch options កំណត់ **`GmsCoreVendorGroupId`** (ឈ្មោះអាចខុសគ្នា: `GmsCore vendor group id` / `Vendor group id`)៖
-  - ប្រើ **`org.microg`** → ត្រូវនឹង 🟢 microG Personal (`org.microg.android.gms`)
-  - ប្រើ **`app.revanced`** → ត្រូវនឹង 🔴 MicroG-RE (`app.revanced.android.gms`)
+  - ប្រើ **`com.google`** → ត្រូវនឹង 🟢 microG Personal (`com.google.android.gms`)
+  - ប្រើ **`app.revanced`** → ត្រូវនឹង 🔴 MicroG-RE (`app.revanced.android.gms`) តែបើអ្នកប្រើ **តែ Personal** កុំប្រើ `app.revanced`
 - **Morphe Manager**: ជម្រើសឈ្មោះស្រដៀងគ្នា ហើយ default គឺ `app.morphe`.
 - បើអ្នកបំណះដោយប្រើ **`GmsCore support`** patch ធម្មតា ហើយមិនប្តូរ vendor id ទេ → វានឹងចងទៅ vendor ដើមរបស់ patcher នោះ។
 
@@ -195,11 +194,11 @@ patch ប្តូរ `com.google.android.gms` ក្នុង app ទៅជា�
 | កម្មវិធី | ស្ថានភាព | ដំណោះស្រាយត្រឹមត្រូវ |
 |---|---|---|
 | **ChatGPT, Grok, Google Wallet, ធនាគារ** ដែលតម្រូវ Play Integrity | ❌ មិនអាចគាំទ្របាន — ត្រូវការ hardware attestation ពី Google ពិត | ប្រើ PWA: `chatgpt.com` / `grok.com` → Chrome/Brave menu → **Add to Home Screen**; ឬ Grok ក្នុង X ដែលបានបំណះ |
-| **Facebook, Messenger, Telegram, WhatsApp, Discord** (unpatched) | ⚠️ Push/FCM ល្អបំផុតជាមួយ 🔵 `-hw` (`com.google.android.gms`); 🟢 Personal ឥឡូវចាប់ C2DM Google-legacy បាន (intent មិនដាក់ `setPackage`) | ប្រើ 🔵 `-hw` បើដំឡើងបាន; បើ Nova 4e ទាស់ហត្ថលេខា `/system` → 🟢 Personal កំណែថ្មីនេះ |
-| **App unpatched ដែល hardcode `com.google.android.gms`** | ⚠️ bind ជាមួយ `setPackage("com.google.android.gms")` ត្រូវការ 🔵 `-hw` | ប្រើ 🔵 `-hw` edition (តែលើ Nova 4e ត្រូវដោះ `priv-app` conflict ជាមុន) ឬបំណះ app នោះ |
+| **Facebook, Messenger, Telegram, WhatsApp, Discord** (unpatched) | ✅ 🟢 Personal ឥឡូវ **គឺ** `com.google.android.gms` ដូច official | ដំឡើង 🟢 Personal តែមួយ (លុប official មុន) |
+| **App unpatched ដែល hardcode `com.google.android.gms`** | ✅ bind ទៅ 🟢 Personal ផ្ទាល់ | ដំឡើង 🟢 Personal; មិនអាចដំឡើងទន្ទឹម official ឬ 🔵 `-hw` |
 | **HMS Push (AppGallery push) សម្រាប់ app ក្រៅ AppGallery** | ❌ មិនអាច — ត្រូវការ AGC app registration + AppGallery distribution | ប្រើ microG GCM (MCS) ធម្មតា ឬបើក Autostart/បិទ battery optimization លើ EMUI |
 
-> សេចក្តីសង្ខេប៖ microG អាចគាំទ្រ **patched apps**, **Contacts Sync**, **Passkeys/2FA**, **Find My Device**, និង **app ដែល hardcode `com.google.android.gms` តាមរយៈ build `-hw`**។ វាមិនអាចបំពេញ **Play Integrity hardware attestation** បានឡើយ ព្រោះវាជាការផ្ទៀងផ្ទាត់ខាង Google server ជាមួយ hardware key ដែល microG គ្មាន។
+> សេចក្តីសង្ខេប៖ 🟢 **Personal តែមួយ** គាំទ្រ **app unpatched** (Messenger/Telegram…), **patched apps** (បំណះជាមួយ `GmsCoreVendorGroupId=com.google`), **Contacts Sync**, **Passkeys/2FA**, **Find My Device**។ វាមិនអាចបំពេញ **Play Integrity hardware attestation** បានឡើយ។
 
 ---
 
@@ -211,20 +210,22 @@ patch ប្តូរ `com.google.android.gms` ក្នុង app ទៅជា�
 ### ការដោះស្រាយ
 ឥឡូវ repo មាន keystore អចិន្ត្រៃយ៍មួយ (`signing/microg-stable-release.p12`, RSA 4096-bit, Alias `microg-release`) ដែល **គ្រប់ build ទាំង ៣ edition ប្រើដូចគ្នា**៖
 
-- ✅ `org.microg.android.gms-…` ថ្មី → ដំឡើងជាន់លើចាស់បាន (Update) ដោយ **រក្សាគណនី និងការកំណត់**។
+- ✅ `com.google.android.gms-…-personal` ថ្មី → ដំឡើងជាន់លើ Personal ថ្មីបាន (Update) ដោយ **រក្សាគណនី**។ **មិន** ដំឡើងជាន់លើ official / Personal ចាស់ `org.microg.android.gms` បានទេ។
 - ✅ CI ពិនិត្យថា Certificate SHA-256 = `867AB5C2C224F04AF299F0BE3298955FD2ACBB1FBCD12F34086F028851C88533EE` រាល់ដង — បើ keystore ផ្លាស់ប្តូរ វា **បដិសេធ build** ដើម្បីកុំឲ្យបែក update ស្ងាត់ៗ។
 - ⚙️ បើចង់ប្រើ key ឯកជនរបស់ខ្លួន គ្រាន់តែដាក់ Secret `KEYSTORE_B64` + `KEYSTORE_ENTRY_ALIAS` + `KEYSTORE_PASSWORD` (workflow នឹងជ្រើសរើស Secret មុន)។
 - 🔒 សូមអាន `signing/README.md` អំពីហេតុអ្វីបានជា key នេះសាធារណៈ (សម្រាប់តែ sideload ផ្ទាល់ខ្លួន មិនមែនសម្រាប់ store ណាមួយឡើយ)។
 
 ### ជំហានផ្លាស់ប្តូរ **តែម្តងគត់** (ព្រោះ key ចាស់បាត់ហើយ)
 ```bash
-# 1) លុបកំណែចាស់ចេញ (តែម្តងនេះប៉ុណ្ណោះ)
-adb uninstall org.microg.android.gms      # ឬ app.revanced.android.gms / com.google.android.gms
-# 2) ដំឡើងកំណែថ្មីពី release tag
-adb install org.microg.android.gms-255070302-personal-arm64-v8a.apk
+# 1) លុប official + Personal ចាស់ + RE (តែម្តងនេះ)
+adb uninstall com.google.android.gms      # official / Original-HW
+adb uninstall org.microg.android.gms      # Personal ចាស់
+adb uninstall app.revanced.android.gms    # MicroG-RE
+# 2) ដំឡើង Personal ថ្មី (package ដូច official)
+adb install com.google.android.gms-255070302-personal-arm64-v8a.apk
 ```
-ចាប់ពីពេលនេះទៅ APK ថ្មីៗ **ដំឡើងជាន់លើបានធម្មតា** (គ្រាន់តែចុច Install ក្នុង Browser/AppGallery)។
-ចំណាំ៖ ការដំឡើងជាន់លើត្រូវធ្វើលើ **package ដូចគ្នា** ដូច្នេះ `microG Personal`, `MicroG-RE` និង `-hw` គឺជា app ដាច់ដោយឡែកពីគ្នា ហើយ update ដោយឡែកពីគ្នា។
+ចាប់ពីពេលនេះទៅ APK Personal **ថ្មី** ដំឡើងជាន់លើបានធម្មតា។
+ចំណាំ៖ Personal និង Original-HW **មិនអាច** ដំឡើងទន្ទឹម (package ដូចគ្នា)។ MicroG-RE នៅតែ package ផ្សេង (`app.revanced.android.gms`)។
 
 ---
 
@@ -234,7 +235,7 @@ adb install org.microg.android.gms-255070302-personal-arm64-v8a.apk
 
 | ចំណុច official | មុននេះ (Personal) | ឥឡូវ (យកមកហើយ) |
 |---|---|---|
-| Package `com.google.android.gms` | `org.microg.android.gms` (ដើម្បីចៀស `/system` signature mismatch) | នៅដដែល — ប្តូរមិនបានដោយគ្មានទាស់ system GMS។ 🔵 `-hw` គឺសមមូល official `-hw` |
+| Package `com.google.android.gms` | `org.microg.android.gms` | ✅ Personal **ឥឡូវគឺ** `com.google.android.gms` (លុប official មុនដំឡើង) |
 | C2DM `com.google.android.c2dm.intent.{REGISTER,UNREGISTER,RECEIVE}` | មានតែ `org.microg.android.c2dm.*` | ✅ Personal ចុះឈ្មោះ **ទាំងពីរ** (Google-legacy + namespaced) |
 | Permission `com.google.android.c2dm.permission.{RECEIVE,SEND}` | មានតែ `org.microg.android.c2dm.*` | ⚠️ Personal **សុំ** (`uses-permission`) តែ **មិនប្រកាសកាន់កាប់** (`<permission>`) — បើប្រកាសនឹងទាស់ GBox / Facebook / GMS ក្នុង `/system` → `INSTALL_FAILED_DUPLICATE_PERMISSION` |
 | FCM delivery | ផ្ញើតែ namespaced action | ✅ `McsService` សាក receiver របស់ app ហើយផ្ញើ **Google-legacy** បើ app ចុះឈ្មោះឈ្មោះនោះ (ដូច Telegram/Messenger) |
@@ -242,14 +243,13 @@ adb install org.microg.android.gms-255070302-personal-arm64-v8a.apk
 | Sign-In `com.google.android.gms.auth.api.signin.service.START` + `GOOGLE_SIGN_IN` | មានតែ namespaced | ✅ Personal ចាប់ Google Sign-In intent (implicit) |
 | Games `com.google.android.gms.games.service.START` | មានតែ namespaced | ✅ Personal ចាប់ Google Play Games intent (implicit) |
 | Location `com.google.android.location.internal.GoogleLocationManagerService.START` | មានតែ namespaced | ✅ គ្រប់ flavor (official name + namespaced) |
-| Auth/Checkin/GCM ប្រាប់ Google ថាជា `com.google.android.gms` | Personal ប្រាប់ថាជា `org.microg.android.gms` → Google បដិសេធ (`UNREGISTERED_ON_API_CONSOLE`) | ✅ `appIsGms()` + GCM/CryptAuth/AccountState ប្រើអត្តសញ្ញាណ official លើ **បណ្តាញ** (package ដំឡើងនៅតែ `org.microg.android.gms` ដើម្បីកុំទាស់ official) |
+| Auth/Checkin/GCM ប្រាប់ Google ថាជា `com.google.android.gms` | Personal ប្រាប់ថាជា `org.microg.android.gms` → Google បដិសេធ | ✅ package ដំឡើង **និង** អត្តសញ្ញាណបណ្តាញ ទាំងពីរជា `com.google.android.gms` |
 
-### អ្វីដែល **នៅតែ** ត្រូវការ 🔵 Original-HW / official `-hw`
-Client library របស់ Google សម័យថ្មី **តែងតែ** `intent.setPackage("com.google.android.gms")`។ Intent-filter alias មិនអាចបញ្ឆោត `setPackage` បានទេ — មានតែ app ដែលដំឡើងជា `com.google.android.gms` (🔵 `-hw` ឬ official) ទើប bind បាន។
+### អ្វីដែល 🟢 Personal ឥឡូវគ្រប់គ្រាន់ (មិនត្រូវការ 🔵 `-hw` ទៀតទេ)
+Client library របស់ Google bind ទៅ `com.google.android.gms` — 🟢 Personal ឥឡូវ **គឺ** package នោះ។ 🔵 `-hw` នៅសល់សម្រាប់អ្នកដែលចង់ប្រើ edition Huawei ផ្លូវការ (NOGAPPS) — **មិនអាចដំឡើងទន្ទឹម Personal**។
 
 លើ **HarmonyOS 3.1+ / EMUI 13.1+** official `-hw` បានចុះហត្ថលេខាដោយសោ **NOGAPPS** (`10321bd8…`) ដែល Huawei allowlist សម្រាប់ signature spoofing។ សោយើងជា self-signed → spoofing native មិនដំណើរការ។ លើ **Nova 4e HarmonyOS 3.0.0** OS មិនមាន spoofing សោះ សូម្បី official ក៏ដូច្នេះដែរ។
 
 ### អ្វីដែល **មិនយក** ពី official
-- Package `com.google.android.gms` លើ Personal (នឹងទាស់ `/system` លើ Nova 4e)
-- Authority `com.google.android.gsf.gservices` លើ Personal (នឹងទាស់ 🔵 `-hw` បើដំឡើងទន្ទឹម)
 - Play Integrity / SafetyNet hardware attestation (official ក៏មិនឆ្លងដែរ)
+- សោ NOGAPPS Huawei (`10321bd8…`) — Personal ប្រើសោផ្ទាល់ខ្លួន `867AB5C2…`

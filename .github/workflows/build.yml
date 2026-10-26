@@ -839,14 +839,12 @@ jobs:
           VER="$(grep -oP 'def origGmsVersionName = "\K[^"]+' build.gradle)"
           TAG_NAME="microg-personal-v${VER}"
           TITLE="[MicroG-Personal] v${VER}-personal — Standalone Personal Use (Not For Play Store / Huawei Nova 4e MAR-AL00 Ready) [Debug & Release]"
-          NOTES="## [MicroG-Personal] v${VER}-personal (\`com.google.android.gms\`) — Personal Use Only (Not For Play Store)
+          NOTES="## [MicroG-Personal] v${VER}-personal (\`com.google.android.gms\`) — one APK (official + RE capability)
           - **Dedicated Git Tag**: \`${TAG_NAME}\` (Logcat debug filter: \`adb logcat | grep 'MicroG-Personal:'\`)
-          - **Why this installs cleanly on Huawei Nova 4e (\`MAR-AL00\`, HarmonyOS 3.0.0) & all phones**:
-            1. **100% Independent from Play Store**: Uses standalone package \`com.google.android.gms\` (zero collision with factory \`com.google.android.gms\` / \`com.google.android.gsf\` in \`/system\`, and all Play Store \`vending_*\` services disabled).
-            2. **100% Independent from MicroG-RE**: Separate package, permissions, providers, Emerald-Teal launcher icon, and label (\`microG Personal\`).
-            3. **Explicitly Self-Signed (v1 + v2 + v3, v4 disabled)**: 4-byte page-aligned + RSA 4096-bit (\`SHA256withRSA\`) personal self-signed certificate; zero malware/sensitive permissions.
-          - **Recommended Single APK for Huawei Nova 4e (\`MAR-AL00\`) & 64-bit phones**:
-            - \`com.google.android.gms-255070302-personal-arm64-v8a.apk\`"
+          - **Uninstall first**: official microG / Original-HW (\`com.google.android.gms\`) and old Personal (\`org.microg.android.gms\`). Same package as official, different signature.
+          - **Patched apps**: rebuild with \`GmsCoreVendorGroupId=com.google\` (not \`app.revanced\`).
+          - Self-signed RSA 4096 (v1+v2+v3). Huawei signature.diff + Huawei account button.
+          - **Recommended APK**: \`com.google.android.gms-255070302-personal-arm64-v8a.apk\`"
 
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             git tag -f "$TAG_NAME" "$GITHUB_SHA"
