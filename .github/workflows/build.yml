@@ -726,8 +726,11 @@ jobs:
             exit 1
           fi
           PERMS="$("$AAPT2" dump permissions "$ARM64_APK")"
-          if echo "$PERMS" | grep -Eq "package: com\.google\.|name='com\.google\.|name='app\.revanced\."; then
-            echo "::error title=Play Store or MicroG-RE Permission Leak::$(echo "$PERMS" | grep -E 'com\.google\.|app\.revanced\.')"
+          # Official microG protocol names republished so unpatched apps
+          # (Telegram/Messenger/WhatsApp) can talk to Personal. Not a Play Store leak.
+          PERMS_FILTERED="$(echo "$PERMS" | grep -Ev "com\\.google\\.android\\.c2dm\\.permission\\.(RECEIVE|SEND)|com\\.google\\.android\\.providers\\.gsf\\.permission\\.READ_GSERVICES|com\\.google\\.android\\.gtalkservice\\.permission\\.GTALK_SERVICE" || true)"
+          if echo "$PERMS_FILTERED" | grep -Eq "package: com\\.google\\.|name='com\\.google\\.|name='app\\.revanced\\."; then
+            echo "::error title=Play Store or MicroG-RE Permission Leak::$(echo "$PERMS_FILTERED" | grep -E 'com\\.google\\.|app\\.revanced\\.')"
             exit 1
           fi
 
