@@ -197,3 +197,28 @@ patch ប្តូរ `com.google.android.gms` ក្នុង app ទៅជា�
 | **HMS Push (AppGallery push) សម្រាប់ app ក្រៅ AppGallery** | ❌ មិនអាច — ត្រូវការ AGC app registration + AppGallery distribution | ប្រើ microG GCM (MCS) ធម្មតា ឬបើក Autostart/បិទ battery optimization លើ EMUI |
 
 > សេចក្តីសង្ខេប៖ microG អាចគាំទ្រ **patched apps**, **Contacts Sync**, **Passkeys/2FA**, **Find My Device**, និង **app ដែល hardcode `com.google.android.gms` តាមរយៈ build `-hw`**។ វាមិនអាចបំពេញ **Play Integrity hardware attestation** បានឡើយ ព្រោះវាជាការផ្ទៀងផ្ទាត់ខាង Google server ជាមួយ hardware key ដែល microG គ្មាន។
+
+---
+
+## ៨. Update កំណែថ្មីបានដោយមិនបាត់ទិន្នន័យ (Stable Signing Key) — កែបញ្ហា `INSTALL_FAILED_UPDATE_INCOMPATIBLE`
+
+### បញ្ហាដើម
+មុននេះ GitHub Actions បង្កើត **keystore ថ្មីរាល់ពេល build** ដូច្នេះ APK ថ្មីមានហត្ថលេខាខុសពី APK ចាស់ → Android បដិសេធ update ហើយតម្រូវឲ្យ **លុបកម្មវិធីចោលមុន** (បាត់គណនី និងការកំណត់ទាំងអស់)។
+
+### ការដោះស្រាយ
+ឥឡូវ repo មាន keystore អចិន្ត្រៃយ៍មួយ (`signing/microg-stable-release.p12`, RSA 4096-bit, Alias `microg-release`) ដែល **គ្រប់ build ទាំង ៣ edition ប្រើដូចគ្នា**៖
+
+- ✅ `org.microg.android.gms-…` ថ្មី → ដំឡើងជាន់លើចាស់បាន (Update) ដោយ **រក្សាគណនី និងការកំណត់**។
+- ✅ CI ពិនិត្យថា Certificate SHA-256 = `867AB5C2C224F04AF299F0BE3298955FD2ACBB1FBCD12F34086F028851C88533EE` រាល់ដង — បើ keystore ផ្លាស់ប្តូរ វា **បដិសេធ build** ដើម្បីកុំឲ្យបែក update ស្ងាត់ៗ។
+- ⚙️ បើចង់ប្រើ key ឯកជនរបស់ខ្លួន គ្រាន់តែដាក់ Secret `KEYSTORE_B64` + `KEYSTORE_ENTRY_ALIAS` + `KEYSTORE_PASSWORD` (workflow នឹងជ្រើសរើស Secret មុន)។
+- 🔒 សូមអាន `signing/README.md` អំពីហេតុអ្វីបានជា key នេះសាធារណៈ (សម្រាប់តែ sideload ផ្ទាល់ខ្លួន មិនមែនសម្រាប់ store ណាមួយឡើយ)។
+
+### ជំហានផ្លាស់ប្តូរ **តែម្តងគត់** (ព្រោះ key ចាស់បាត់ហើយ)
+```bash
+# 1) លុបកំណែចាស់ចេញ (តែម្តងនេះប៉ុណ្ណោះ)
+adb uninstall org.microg.android.gms      # ឬ app.revanced.android.gms / com.google.android.gms
+# 2) ដំឡើងកំណែថ្មីពី release tag
+adb install org.microg.android.gms-255070302-personal-arm64-v8a.apk
+```
+ចាប់ពីពេលនេះទៅ APK ថ្មីៗ **ដំឡើងជាន់លើបានធម្មតា** (គ្រាន់តែចុច Install ក្នុង Browser/AppGallery)។
+ចំណាំ៖ ការដំឡើងជាន់លើត្រូវធ្វើលើ **package ដូចគ្នា** ដូច្នេះ `microG Personal`, `MicroG-RE` និង `-hw` គឺជា app ដាច់ដោយឡែកពីគ្នា ហើយ update ដោយឡែកពីគ្នា។
