@@ -233,7 +233,7 @@ adb install org.microg.android.gms-255070302-personal-arm64-v8a.apk
 |---|---|---|
 | Package `com.google.android.gms` | `org.microg.android.gms` (ដើម្បីចៀស `/system` signature mismatch) | នៅដដែល — ប្តូរមិនបានដោយគ្មានទាស់ system GMS។ 🔵 `-hw` គឺសមមូល official `-hw` |
 | C2DM `com.google.android.c2dm.intent.{REGISTER,UNREGISTER,RECEIVE}` | មានតែ `org.microg.android.c2dm.*` | ✅ Personal ចុះឈ្មោះ **ទាំងពីរ** (Google-legacy + namespaced) |
-| Permission `com.google.android.c2dm.permission.{RECEIVE,SEND}` | មានតែ `org.microg.android.c2dm.*` | ✅ Personal ប្រកាសឈ្មោះ Google ដូច official (IsolateManifest អនុញ្ញាត; cert ដូច `-hw` → Android អនុញ្ញាត duplicate) |
+| Permission `com.google.android.c2dm.permission.{RECEIVE,SEND}` | មានតែ `org.microg.android.c2dm.*` | ⚠️ Personal **សុំ** (`uses-permission`) តែ **មិនប្រកាសកាន់កាប់** (`<permission>`) — បើប្រកាសនឹងទាស់ GBox / Facebook / GMS ក្នុង `/system` → `INSTALL_FAILED_DUPLICATE_PERMISSION` |
 | FCM delivery | ផ្ញើតែ namespaced action | ✅ `McsService` សាក receiver របស់ app ហើយផ្ញើ **Google-legacy** បើ app ចុះឈ្មោះឈ្មោះនោះ (ដូច Telegram/Messenger) |
 | `com.google.iid.TOKEN_REQUEST` | `org.microg.iid.TOKEN_REQUEST` | ✅ Personal ចាប់ Google IID token request |
 | Sign-In `com.google.android.gms.auth.api.signin.service.START` + `GOOGLE_SIGN_IN` | មានតែ namespaced | ✅ Personal ចាប់ Google Sign-In intent (implicit) |
