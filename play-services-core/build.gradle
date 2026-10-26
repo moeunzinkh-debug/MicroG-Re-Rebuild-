@@ -361,15 +361,6 @@ abstract class IsolateManifestTask extends DefaultTask {
     @OutputFile
     abstract RegularFileProperty getUpdatedManifest()
 
-    private static boolean isOwnedByEdition(String id, String appId, String basePkg) {
-        return id == appId ||
-               id.startsWith(appId + ".") ||
-               id.startsWith(basePkg + ".android.") ||
-               id.startsWith(basePkg + ".firebase.") ||
-               id == (basePkg + ".settings") ||
-               id.startsWith("android.permission-group.")
-    }
-
     @TaskAction
     void taskAction() {
         String androidNs = "http://schemas.android.com/apk/res/android"
@@ -377,6 +368,14 @@ abstract class IsolateManifestTask extends DefaultTask {
         String basePkg = appId.endsWith(".android.gms")
                 ? appId.substring(0, appId.length() - ".android.gms".length())
                 : appId
+        def isOwned = { String id ->
+            id == appId ||
+            id.startsWith(appId + ".") ||
+            id.startsWith(basePkg + ".android.") ||
+            id.startsWith(basePkg + ".firebase.") ||
+            id == (basePkg + ".settings") ||
+            id.startsWith("android.permission-group.")
+        }
 
         def dbf = DocumentBuilderFactory.newInstance()
         dbf.setNamespaceAware(true)
@@ -398,7 +397,7 @@ abstract class IsolateManifestTask extends DefaultTask {
             for (int i = 0; i < nodes.length; i++) {
                 Element el = (Element) nodes.item(i)
                 String name = el.getAttributeNS(androidNs, "name")
-                if (name && !isOwnedByEdition(name, appId, basePkg)) {
+                if (name && !isOwned(name)) {
                     String newName = "${appId}.${name}"
                     renamedPerms[name] = newName
                     el.setAttributeNS(androidNs, "${nsPrefix}:name", newName)
@@ -433,7 +432,7 @@ abstract class IsolateManifestTask extends DefaultTask {
             if (auths) {
                 String updatedAuths = auths.split(";").collect { String a ->
                     String trimmed = a.trim()
-                    if (trimmed && !isOwnedByEdition(trimmed, appId, basePkg)) {
+                    if (trimmed && !isOwned(trimmed)) {
                         String newAuth = "${appId}.${trimmed}"
                         rewrittenAuthCount++
                         logger.lifecycle("ISOLATE_MANIFEST [{}]: Rewrote <provider> authority '{}' -> '{}'", appId, trimmed, newAuth)
@@ -452,7 +451,7 @@ abstract class IsolateManifestTask extends DefaultTask {
             for (int i = 0; i < libs.length; i++) {
                 Element lib = (Element) libs.item(i)
                 String lName = lib.getAttributeNS(androidNs, "name")
-                if (lName && !isOwnedByEdition(lName, appId, basePkg)) {
+                if (lName && !isOwned(lName)) {
                     String newLib = "${appId}.${lName}"
                     lib.setAttributeNS(androidNs, "${nsPrefix}:name", newLib)
                     logger.lifecycle("ISOLATE_MANIFEST [{}]: Rewrote <{}> '{}' -> '{}'", appId, libTag, lName, newLib)
