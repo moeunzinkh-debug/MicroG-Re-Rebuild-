@@ -37,7 +37,7 @@ class RemotePayloadInterceptor() : Interceptor {
         val requestBuilder = chain.request().newBuilder()
             .header("user-agent", buildUserAgent())
             .header("x-goog-api-key", FMD_API_KEY)
-            .header("x-android-package", Constants.GMS_PACKAGE_NAME)
+            .header("x-android-package", Constants.GOOGLE_GMS_PACKAGE_NAME)
             .header("x-android-cert", Constants.GMS_PACKAGE_SIGNATURE_SHA1)
         return chain.proceed(requestBuilder.build())
     }
@@ -61,7 +61,7 @@ class ProcessSitrepInterceptor(
 private fun buildUserAgent(): String {
     val locale = Locale.getDefault()
     val localeStr = "${locale.language}_${locale.country}_#${locale.script.ifEmpty { "Hans" }}"
-    return "${Constants.GMS_PACKAGE_NAME}/${Constants.GMS_VERSION_CODE} " +
+    return "${Constants.GOOGLE_GMS_PACKAGE_NAME}/${Constants.GMS_VERSION_CODE} " +
             "(Linux; U; Android ${Build.VERSION.RELEASE}; $localeStr; ${Build.MODEL}; " +
             "Build/${Build.ID}; Cronet/140.0.7289.0) grpc-java-cronet/1.76.0-SNAPSHOT"
 }

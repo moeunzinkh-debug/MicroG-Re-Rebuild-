@@ -173,11 +173,24 @@ def main() -> int:
             print(f"  - [{cat}] '{val}' in {apk_name}", file=sys.stderr)
         return 1
 
+    # Official microG protocol names that unpatched apps hardcode. Personal
+    # republishes them so Telegram/Messenger/WhatsApp/etc. can talk to it;
+    # Original-HW already owns the same strings via basePackageName=com.google.
+    # Android allows the duplicate when both APKs share a signing certificate.
+    shared_protocol = {
+        "com.google.android.c2dm.permission.RECEIVE",
+        "com.google.android.c2dm.permission.SEND",
+        "com.google.android.providers.gsf.permission.READ_GSERVICES",
+        "com.google.android.gtalkservice.permission.GTALK_SERVICE",
+    }
+
     collisions = []
     for cat in categories:
         seen = {}
         for item in parsed:
             for val in sorted(item[cat]):
+                if cat == "permission" and val in shared_protocol:
+                    continue
                 if val in seen:
                     collisions.append((cat, val, seen[val], item["apk"]))
                 else:

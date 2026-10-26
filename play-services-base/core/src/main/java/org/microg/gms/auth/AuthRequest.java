@@ -209,7 +209,11 @@ public class AuthRequest extends HttpFormClient.Request {
     }
 
     public AuthRequest appIsGms() {
-        return app(Constants.GMS_PACKAGE_NAME, Constants.GMS_PACKAGE_SIGNATURE_SHA1);
+        // Always identify to Google's servers as real Play Services, even when this
+        // build is installed as org.microg.android.gms (Personal) or app.revanced.android.gms.
+        // Official microG does the same (GMS_PACKAGE_NAME is hardcoded com.google.android.gms).
+        // Using this build's own name is rejected as UNREGISTERED_ON_API_CONSOLE.
+        return app(Constants.GOOGLE_GMS_PACKAGE_NAME, Constants.GMS_PACKAGE_SIGNATURE_SHA1);
     }
 
     public AuthRequest callerIsGms() {

@@ -294,9 +294,22 @@ android {
         "personal" {
             dimension 'target'
             versionNameSuffix "-personal"
-            matchingFallbacks = ['default']
+            // Single APK the user asked for: official identity so Messenger /
+            // Telegram / Grab bind to us, Huawei signature.diff, Personal branding.
+            // Patched ReVanced/Morphe apps must use GmsCoreVendorGroupId=com.google.
+            applicationId "com.google.android.gms"
+            matchingFallbacks = ['huawei', 'default']
             buildConfigField "String", "EDITION_TAG", "\"MicroG-Personal\""
             buildConfigField "String", "RELEASE_TAG_PREFIX", "\"microg-personal-v\""
+            buildConfigField "String", "BASE_PACKAGE_NAME", "\"com.google\""
+            manifestPlaceholders.basePackageName = "com.google"
+            resValue "string", "var_authenticator_account_type", "com.google"
+            resValue "string", "var_contact_syncadapter_account_type", "com.google"
+            resValue "string", "var_pref_auth_action_security_settings", "com.google.android.gms.accountsettings.SECURITY_SETTINGS"
+            resValue "string", "var_pref_auth_action_privacy_settings", "com.google.android.gms.accountsettings.PRIVACY_SETTINGS"
+            resValue "string", "var_pref_auth_action_preferences_settings", "com.google.android.gms.accountsettings.ACCOUNT_PREFERENCES_SETTINGS"
+            resValue "string", "var_pref_start_gms_package", "com.google.android.gms"
+            resValue "string", "package_id", "com.google.android.gms"
         }
         "user" {
             dimension 'target'
@@ -368,13 +381,25 @@ abstract class IsolateManifestTask extends DefaultTask {
         String basePkg = appId.endsWith(".android.gms")
                 ? appId.substring(0, appId.length() - ".android.gms".length())
                 : appId
+        // Google C2DM / GSF permission names that unpatched apps (Telegram, Messenger,
+        // WhatsApp, Facebook, …) hardcode. Official microG always declares these; we
+        // keep them as shared protocol names so Personal can talk to those apps without
+        // becoming com.google.android.gms. Same-certificate duplicates with Original-HW
+        // are allowed by Android.
+        def googleSharedProtocol = [
+            "com.google.android.c2dm.permission.RECEIVE",
+            "com.google.android.c2dm.permission.SEND",
+            "com.google.android.providers.gsf.permission.READ_GSERVICES",
+            "com.google.android.gtalkservice.permission.GTALK_SERVICE",
+        ] as Set
         def isOwned = { String id ->
             id == appId ||
             id.startsWith(appId + ".") ||
             id.startsWith(basePkg + ".android.") ||
             id.startsWith(basePkg + ".firebase.") ||
             id == (basePkg + ".settings") ||
-            id.startsWith("android.permission-group.")
+            id.startsWith("android.permission-group.") ||
+            googleSharedProtocol.contains(id)
         }
 
         def dbf = DocumentBuilderFactory.newInstance()

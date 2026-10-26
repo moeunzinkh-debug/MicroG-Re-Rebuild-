@@ -6,6 +6,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!--
+      Do NOT <permission>-define com.google.android.c2dm.* / GSF / GTALK names.
+      Defining them caused INSTALL_FAILED_DUPLICATE_PERMISSION on devices that
+      already have GBox, official microG, Original-HW, a /system GMS stub, or
+      apps (Facebook/Messenger) that declared the same names first.
+
+      uses-permission is safe (request, don't own). Intent-filters below still
+      catch implicit Google C2DM / Sign-In / Games / Location actions.
+    -->
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+    <uses-permission android:name="com.google.android.c2dm.permission.SEND" />
+    <uses-permission android:name="com.google.android.providers.gsf.permission.READ_GSERVICES" />
+    <uses-permission android:name="com.google.android.gtalkservice.permission.GTALK_SERVICE" />
+
     <application>
         <!-- Explicitly personal / standalone build — NOT for Google Play Store -->
         <meta-data
@@ -61,5 +75,91 @@
         <meta-data
             android:name="org.microg.gms.settings.vending_apps_install"
             android:value="false" />
+
+        <!-- Google-legacy C2DM / IID / Sign-In / Games actions (official microG names).
+             Merged onto the existing services so unpatched client libraries that fire
+             implicit intents (no setPackage) reach Personal. Apps that bind with
+             setPackage("com.google.android.gms") still need Original-HW. -->
+        <service
+            android:name="org.microg.gms.gcm.PushRegisterService"
+            android:exported="true"
+            android:process=":persistent">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.REGISTER" />
+                <action android:name="com.google.android.c2dm.intent.UNREGISTER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name="org.microg.gms.gcm.PushRegisterReceiver"
+            android:exported="true"
+            android:process=":persistent">
+            <intent-filter>
+                <action android:name="com.google.iid.TOKEN_REQUEST" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name="org.microg.gms.checkin.TriggerReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+                <category android:name="android.server.checkin.CHECKIN" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name="org.microg.gms.gcm.SendReceiver"
+            android:exported="true"
+            android:process=":persistent">
+            <intent-filter>
+                <action android:name="com.google.android.gcm.intent.SEND" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name="org.microg.gms.auth.signin.AuthSignInActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.auth.GOOGLE_SIGN_IN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name="org.microg.gms.auth.signin.AuthSignInService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.auth.api.signin.service.START" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="org.microg.gms.games.GamesService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.games.service.START" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="org.microg.gms.games.GamesConnectService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.games.internal.connect.service.START" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="org.microg.gms.location.manager.GoogleLocationManagerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.location.internal.GoogleLocationManagerService.START" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

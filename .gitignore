@@ -8,6 +8,8 @@ keystore/
 *.jks
 *.keystore
 *.p12
+# Stable release signing identity (committed on purpose so updates keep working):
+!signing/microg-stable-release.p12
 .gradle/
 .idea/
 user.gradle

@@ -85,6 +85,21 @@ jobs:
             echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          elif [[ -f "signing/microg-stable-release.p12" ]]; then
+            # Stable, committed release keystore: every build keeps the same signing identity so
+            # APK updates install in place (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+            STABLE_PASS="$(cat signing/microg-stable-release.password)"
+            EXPECTED_CERT="$(tr -d '[:space:]' < signing/EXPECTED_CERT_SHA256.txt)"
+            ACTUAL_CERT="$(openssl pkcs12 -in signing/microg-stable-release.p12 -passin "pass:${STABLE_PASS}" -nokeys -clcerts | openssl x509 -outform DER | sha256sum | awk '{print toupper($1)}')"
+            if [[ -n "$EXPECTED_CERT" && "$ACTUAL_CERT" != "$EXPECTED_CERT" ]]; then
+              echo "::error::Stable keystore certificate changed (${ACTUAL_CERT} != ${EXPECTED_CERT}) - refusing to sign."
+              exit 1
+            fi
+            echo "Using committed stable release keystore (cert SHA-256 ${ACTUAL_CERT})."
+            echo "KEYSTORE_FILE=${GITHUB_WORKSPACE}/signing/microg-stable-release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=${STABLE_PASS}" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${STABLE_PASS}" >> "$GITHUB_ENV"
           else
             echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
             echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
@@ -226,6 +241,21 @@ jobs:
             echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          elif [[ -f "signing/microg-stable-release.p12" ]]; then
+            # Stable, committed release keystore: every build keeps the same signing identity so
+            # APK updates install in place (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+            STABLE_PASS="$(cat signing/microg-stable-release.password)"
+            EXPECTED_CERT="$(tr -d '[:space:]' < signing/EXPECTED_CERT_SHA256.txt)"
+            ACTUAL_CERT="$(openssl pkcs12 -in signing/microg-stable-release.p12 -passin "pass:${STABLE_PASS}" -nokeys -clcerts | openssl x509 -outform DER | sha256sum | awk '{print toupper($1)}')"
+            if [[ -n "$EXPECTED_CERT" && "$ACTUAL_CERT" != "$EXPECTED_CERT" ]]; then
+              echo "::error::Stable keystore certificate changed (${ACTUAL_CERT} != ${EXPECTED_CERT}) - refusing to sign."
+              exit 1
+            fi
+            echo "Using committed stable release keystore (cert SHA-256 ${ACTUAL_CERT})."
+            echo "KEYSTORE_FILE=${GITHUB_WORKSPACE}/signing/microg-stable-release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=${STABLE_PASS}" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${STABLE_PASS}" >> "$GITHUB_ENV"
           else
             echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
             echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"

@@ -567,6 +567,28 @@ Some apps may not be able to register again after this action. You may need to c
     <string name="self_check_name_oem_restriction">Background process restrictions</string>
     <string name="self_check_resolution_oem_restriction">Your system may restrict background processes. Tap here to open Don\'t Kill My App! site and learn how to disable these restrictions</string>
 
+    <!-- GMS vendor compatibility: which GMS build each patched app expects -->
+    <string name="self_check_cat_gms_compat">GMS compatibility</string>
+    <string name="self_check_gms_build_is">This build answers as %1$s</string>
+    <string name="self_check_gms_build_is_resolution">Patched apps can only connect to the GMS build they were patched for. Unpatched apps always look for com.google.android.gms.</string>
+    <string name="self_check_gms_impl_installed">Installed GMS implementations</string>
+    <string name="self_check_gms_impl_resolution">Detected: %1$s</string>
+    <string name="self_check_gms_no_patched_apps">No patched apps detected</string>
+    <string name="self_check_gms_app_ok">%1$s is patched for %2$s (this build)</string>
+    <string name="self_check_gms_app_ok_other">%1$s is patched for %2$s (installed side by side)</string>
+    <string name="self_check_gms_app_missing">%1$s is patched for %2$s, which is not installed</string>
+    <string name="self_check_gms_app_missing_resolution">Install %1$s, or re-patch %3$s with GmsCoreVendorGroupId %4$s. Expected package: %2$s</string>
+    <string name="self_check_gms_app_unknown">%1$s: GMS target not detected</string>
+    <string name="self_check_gms_app_unknown_resolution">Open %1$s and check whether it can sign in. If it cannot, re-patch it with GmsCoreVendorGroupId %2$s.</string>
+    <string name="gms_vendor_with_package">%1$s (%2$s)</string>
+    <string name="gms_vendor_revanced" translatable="false">MicroG-RE</string>
+    <string name="gms_vendor_morphe" translatable="false">Morphe GmsCore</string>
+    <string name="gms_vendor_personal" translatable="false">microG Personal</string>
+    <string name="gms_vendor_user" translatable="false">microG (user build)</string>
+    <string name="gms_vendor_rvx" translatable="false">ReVanced Extended GmsCore</string>
+    <string name="gms_vendor_mgoogle" translatable="false">Vanced microG</string>
+    <string name="gms_vendor_google">Google Play services</string>
+
     <string name="morphe_sign_in_with_google_microg_label">Sign in with Google via MicroG RE</string>
 
     <string name="self_check_patched_app_installed">Running with %1$s</string>

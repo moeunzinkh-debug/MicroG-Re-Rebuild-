@@ -114,16 +114,20 @@ private val Intent.appPackageName: String?
     get() = PackageUtils.packageFromPendingIntent(app)
 
 private val Intent.isRegisterAction: Boolean
-    get() = action == ACTION_C2DM_REGISTER || action == ACTION_C2DM_REGISTER_PACKAGE
+    get() = action == ACTION_C2DM_REGISTER
+            || action == ACTION_C2DM_REGISTER_PACKAGE
+            || action == ACTION_C2DM_REGISTER_LEGACY
 
 private val Intent.isUnregisterAction: Boolean
-    get() = action == ACTION_C2DM_UNREGISTER || action == ACTION_C2DM_UNREGISTER_PACKAGE
+    get() = action == ACTION_C2DM_UNREGISTER
+            || action == ACTION_C2DM_UNREGISTER_PACKAGE
+            || action == ACTION_C2DM_UNREGISTER_LEGACY
 
 private val Intent.replyAction: String
-    get() = if (action == ACTION_C2DM_REGISTER_PACKAGE || action == ACTION_C2DM_UNREGISTER_PACKAGE) {
-        ACTION_C2DM_REGISTRATION_PACKAGE
-    } else {
-        ACTION_C2DM_REGISTRATION
+    get() = when (action) {
+        ACTION_C2DM_REGISTER_LEGACY, ACTION_C2DM_UNREGISTER_LEGACY -> ACTION_C2DM_REGISTRATION_LEGACY
+        ACTION_C2DM_REGISTER_PACKAGE, ACTION_C2DM_UNREGISTER_PACKAGE -> ACTION_C2DM_REGISTRATION_PACKAGE
+        else -> ACTION_C2DM_REGISTRATION
     }
 
 class PushRegisterService : LifecycleService() {

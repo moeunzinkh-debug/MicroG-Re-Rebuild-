@@ -219,6 +219,7 @@ suspend fun requestGamesInfo(
 suspend fun registerForGames(context: Context, account: Account) {
     withContext(Dispatchers.IO) {
         val authManager = AuthManager(context, account.name, Constants.GMS_PACKAGE_NAME, "oauth2:${Scopes.GAMES_FIRSTPARTY}")
+        authManager.isGmsApp = true
         authManager.setOauth2Foreground("1")
         val authToken = authManager.requestAuthWithBackgroundResolution(false).auth ?: throw RuntimeException("authToken is null")
         val client = OkHttpClient().newBuilder().addInterceptor(HeaderInterceptor(context, authToken)).build()

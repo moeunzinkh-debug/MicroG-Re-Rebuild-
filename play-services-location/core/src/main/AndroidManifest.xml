@@ -62,6 +62,7 @@
             android:name="org.microg.gms.location.manager.GoogleLocationManagerService"
             android:exported="true">
             <intent-filter>
+                <action android:name="com.google.android.location.internal.GoogleLocationManagerService.START" />
                 <action android:name="${basePackageName}.android.location.internal.GoogleLocationManagerService.START" />
             </intent-filter>
         </service>

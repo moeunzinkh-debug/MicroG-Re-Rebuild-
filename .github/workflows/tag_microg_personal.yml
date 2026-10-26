@@ -76,6 +76,21 @@ jobs:
             echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
             echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          elif [[ -f "signing/microg-stable-release.p12" ]]; then
+            # Stable, committed release keystore: every build keeps the same signing identity so
+            # APK updates install in place (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+            STABLE_PASS="$(cat signing/microg-stable-release.password)"
+            EXPECTED_CERT="$(tr -d '[:space:]' < signing/EXPECTED_CERT_SHA256.txt)"
+            ACTUAL_CERT="$(openssl pkcs12 -in signing/microg-stable-release.p12 -passin "pass:${STABLE_PASS}" -nokeys -clcerts | openssl x509 -outform DER | sha256sum | awk '{print toupper($1)}')"
+            if [[ -n "$EXPECTED_CERT" && "$ACTUAL_CERT" != "$EXPECTED_CERT" ]]; then
+              echo "::error::Stable keystore certificate changed (${ACTUAL_CERT} != ${EXPECTED_CERT}) - refusing to sign."
+              exit 1
+            fi
+            echo "Using committed stable release keystore (cert SHA-256 ${ACTUAL_CERT})."
+            echo "KEYSTORE_FILE=${GITHUB_WORKSPACE}/signing/microg-stable-release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=${STABLE_PASS}" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${STABLE_PASS}" >> "$GITHUB_ENV"
           else
             echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
             echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
@@ -96,25 +111,25 @@ jobs:
             local out_dir="play-services-core/build/outputs/apk/personal/${lower}"
             rm -rf "$out_dir"
             # shellcheck disable=SC2086
-            ./gradlew ":play-services-core:assemblePersonal${target}" -PbasePackageName=org.microg $extra
+            ./gradlew ":play-services-core:assemblePersonal${target}" -PbasePackageName=com.google $extra
             cp "$(find "$out_dir" -maxdepth 2 -name '*.apk' | head -n 1)" "dist-personal/$out_name"
           }
 
-          build_one "Release" "release" "-Pabi=arm64-v8a" "org.microg.android.gms-${GMS_VC}-personal-arm64-v8a.apk"
-          build_one "Release" "release" "-Pabi=armeabi-v7a" "org.microg.android.gms-${GMS_VC}-personal-armeabi-v7a.apk"
-          build_one "Release" "release" "" "org.microg.android.gms-${GMS_VC}-personal.apk"
+          build_one "Release" "release" "-Pabi=arm64-v8a" "com.google.android.gms-${GMS_VC}-personal-arm64-v8a.apk"
+          build_one "Release" "release" "-Pabi=armeabi-v7a" "com.google.android.gms-${GMS_VC}-personal-armeabi-v7a.apk"
+          build_one "Release" "release" "" "com.google.android.gms-${GMS_VC}-personal.apk"
           SIGN_KEY_PASS="$KEYSTORE_ENTRY_PASSWORD" bash scripts/sign_personal_apk.sh "$KEYSTORE_FILE" "$KEYSTORE_PASSWORD" "$KEYSTORE_ENTRY_ALIAS" \
-            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-arm64-v8a.apk" \
-            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-armeabi-v7a.apk" \
-            "dist-personal/org.microg.android.gms-${GMS_VC}-personal.apk"
+            "dist-personal/com.google.android.gms-${GMS_VC}-personal-arm64-v8a.apk" \
+            "dist-personal/com.google.android.gms-${GMS_VC}-personal-armeabi-v7a.apk" \
+            "dist-personal/com.google.android.gms-${GMS_VC}-personal.apk"
 
-          build_one "Debug" "debug" "-Pabi=arm64-v8a" "org.microg.android.gms-${GMS_VC}-personal-debug-arm64-v8a.apk"
-          build_one "Debug" "debug" "-Pabi=armeabi-v7a" "org.microg.android.gms-${GMS_VC}-personal-debug-armeabi-v7a.apk"
-          build_one "Debug" "debug" "" "org.microg.android.gms-${GMS_VC}-personal-debug.apk"
+          build_one "Debug" "debug" "-Pabi=arm64-v8a" "com.google.android.gms-${GMS_VC}-personal-debug-arm64-v8a.apk"
+          build_one "Debug" "debug" "-Pabi=armeabi-v7a" "com.google.android.gms-${GMS_VC}-personal-debug-armeabi-v7a.apk"
+          build_one "Debug" "debug" "" "com.google.android.gms-${GMS_VC}-personal-debug.apk"
           SIGN_KEY_PASS="$DEBUG_KEYSTORE_ENTRY_PASSWORD" bash scripts/sign_personal_apk.sh "$DEBUG_KEYSTORE_FILE" "$DEBUG_KEYSTORE_PASSWORD" "$DEBUG_KEYSTORE_ENTRY_ALIAS" \
-            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-debug-arm64-v8a.apk" \
-            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-debug-armeabi-v7a.apk" \
-            "dist-personal/org.microg.android.gms-${GMS_VC}-personal-debug.apk"
+            "dist-personal/com.google.android.gms-${GMS_VC}-personal-debug-arm64-v8a.apk" \
+            "dist-personal/com.google.android.gms-${GMS_VC}-personal-debug-armeabi-v7a.apk" \
+            "dist-personal/com.google.android.gms-${GMS_VC}-personal-debug.apk"
 
           bash scripts/verify_built_apk.sh dist-personal/*.apk
           (cd dist-personal && sha256sum *.apk > SHA256SUMS-microg-personal.txt)
@@ -139,5 +154,5 @@ jobs:
             gh release create "$TAG_NAME" dist-personal/*.apk dist-personal/SHA256SUMS-microg-personal.txt \
               --target "$GITHUB_SHA" \
               --title "$TITLE" \
-              --notes "Personal self-signed standalone microG build (\`org.microg.android.gms\`) — not for Play Store."
+              --notes "Personal self-signed standalone microG build (\`com.google.android.gms\`) — not for Play Store."
           fi

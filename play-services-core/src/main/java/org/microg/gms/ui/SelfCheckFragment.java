@@ -31,6 +31,7 @@ import androidx.core.app.NotificationManagerCompat;
 import androidx.fragment.app.Fragment;
 
 import org.microg.gms.common.Constants;
+import org.microg.tools.selfcheck.GmsCompatibilityChecks;
 import org.microg.tools.selfcheck.InstalledPackagesChecks;
 import org.microg.tools.selfcheck.InstalledPatcherChecks;
 //import org.microg.tools.selfcheck.NlpOsCompatChecks;
@@ -72,6 +73,9 @@ public class SelfCheckFragment extends AbstractSelfCheckFragment {
             checks.add(new RomSpoofSignatureChecks());
         }
         checks.add(new InstalledPackagesChecks());
+        // Vendor compatibility is useful on every flavor: it lists the GMS builds installed side by
+        // side and reports which one each ReVanced/Morphe-patched app is permanently bound to.
+        checks.add(new GmsCompatibilityChecks());
         if (SDK_INT >= 23) {
             List<String> permissions = new ArrayList<>();
             permissions.add(ACCESS_COARSE_LOCATION);

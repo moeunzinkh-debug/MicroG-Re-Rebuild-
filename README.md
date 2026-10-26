@@ -28,6 +28,30 @@ Most modern phones can use this release.
 
 If you are unsure which variant to use, download the universal APK (`microg-version.apk`).
 
+## GMS compatibility (patched apps vs. installed GMS build)
+
+A ReVanced/Morphe-patched app is permanently bound to one GMS package name, chosen with
+`GmsCoreVendorGroupId` at patch time. It can only connect to the build that owns that package:
+
+| Patched for | Connects to | Release tag |
+|---|---|---|
+| `app.revanced.android.gms` | MicroG-RE `7.3.0-dev.2` | `microg-re-v7.3.0-dev.2` |
+| `com.google.android.gms` | microG Personal (all-in-one) **or** Original-HW | `microg-personal-v0.3.17.255070` / `microg-original-hw-v0.3.17.255070` |
+| `com.google.android.gms` | Original microG Huawei (`-hw`) or real Play services | `microg-original-hw-v0.3.17.255070` |
+
+Every build now contains a **Self-Check → GMS compatibility** group that lists all installed GMS
+implementations side by side and scans each patched app's DEX files to report which vendor package it
+expects — with the exact `GmsCoreVendorGroupId` to use when re-patching. The scan is cached per APK
+size/mtime and only touches apps whose package name carries a known patcher marker.
+
+Personal also republishes official microG `v0.3.17.252432` Google-legacy C2DM / Sign-In / Games
+intent actions (`com.google.android.c2dm.*`, `com.google.android.gms.auth.api.signin.service.START`,
+…) so unpatched apps that fire **implicit** GMS intents can reach it. Apps that bind with
+`setPackage("com.google.android.gms")` still need Original-HW. See [README.km.md](README.km.md) §៩.
+
+What microG cannot do: satisfy Play Integrity hardware attestation (ChatGPT, Grok, Google Wallet,
+banking apps). Those need a real Google-certified device or a PWA. Khmer details: [README.km.md](README.km.md).
+
 ## Translations
 
 If you'd like to help translate MicroG please see [here](https://morphe.software/translate).
