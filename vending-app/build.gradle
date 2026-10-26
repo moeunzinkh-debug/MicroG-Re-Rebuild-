@@ -8,6 +8,20 @@ apply plugin: 'kotlin-android'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 apply plugin: 'com.squareup.wire'
 
+def releaseStorePath = providers.environmentVariable("KEYSTORE_FILE").orNull ?: localProperties.getProperty("signing.storeFile", rootProject.file("keystore/release.p12").absolutePath)
+def releaseStoreFile = file(releaseStorePath)
+def releaseStorePass = providers.environmentVariable("KEYSTORE_PASSWORD").orNull ?: localProperties.getProperty("signing.storePassword", "")
+def releaseKeyAlias = providers.environmentVariable("KEYSTORE_ENTRY_ALIAS").orNull ?: localProperties.getProperty("signing.keyAlias", "")
+def releaseKeyPass = providers.environmentVariable("KEYSTORE_ENTRY_PASSWORD").orNull ?: localProperties.getProperty("signing.keyPassword", releaseStorePass)
+def hasReleaseKeystore = releaseStoreFile.exists() && !releaseStorePass.isEmpty() && !releaseKeyAlias.isEmpty()
+
+def debugStorePath = providers.environmentVariable("DEBUG_KEYSTORE_FILE").orNull ?: localProperties.getProperty("signing.debugStoreFile", rootProject.file("keystore/debug.p12").absolutePath)
+def debugStoreFile = file(debugStorePath)
+def debugStorePass = providers.environmentVariable("DEBUG_KEYSTORE_PASSWORD").orNull ?: localProperties.getProperty("signing.debugStorePassword", "")
+def debugKeyAlias = providers.environmentVariable("DEBUG_KEYSTORE_ENTRY_ALIAS").orNull ?: localProperties.getProperty("signing.debugKeyAlias", "")
+def debugKeyPass = providers.environmentVariable("DEBUG_KEYSTORE_ENTRY_PASSWORD").orNull ?: localProperties.getProperty("signing.debugKeyPassword", debugStorePass)
+def hasCustomDebugKeystore = debugStoreFile.exists() && !debugStorePass.isEmpty() && !debugKeyAlias.isEmpty()
+
 android {
     namespace "com.android.vending"
     compileSdkVersion androidCompileSdk
@@ -29,8 +43,34 @@ android {
         ]
     }
 
+    signingConfigs {
+        debug {
+            if (hasCustomDebugKeystore) {
+                storeFile debugStoreFile
+                storePassword debugStorePass
+                keyAlias debugKeyAlias
+                keyPassword debugKeyPass
+            }
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
+        if (hasReleaseKeystore) {
+            releaseCustom {
+                storeFile releaseStoreFile
+                storePassword releaseStorePass
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPass
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
+            signingConfig signingConfigs.debug
             postprocessing {
                 removeUnusedCode true
                 removeUnusedResources false
@@ -40,6 +80,9 @@ android {
             }
         }
         release {
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.releaseCustom
+            }
             postprocessing {
                 removeUnusedCode true
                 removeUnusedResources true
@@ -161,7 +204,8 @@ if (file('user.gradle').exists()) {
 }
 
 android.applicationVariants.all { variant ->
+    def buildSuffix = variant.name.toLowerCase().endsWith("debug") ? "-debug" : (hasReleaseKeystore ? "" : "-unsigned")
     variant.outputs.each { output ->
-        output.outputFileName = variant.applicationId + "-" + variant.versionCode + variant.versionName.substring(vendingAppVersionName.length()) + ".apk"
+        output.outputFileName = variant.applicationId + "-" + variant.versionCode + variant.versionName.substring(vendingAppVersionName.length()) + buildSuffix + ".apk"
     }
 }

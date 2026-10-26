@@ -5,7 +5,7 @@
 
 buildscript {
     ext.applicationNamespace = "com.google.android.gms"
-    ext.basePackageName = "app.revanced"
+    ext.basePackageName = project.hasProperty("basePackageName") ? project.property("basePackageName").toString() : "app.revanced"
 
     ext.cronetVersion = '102.5005.125'
     ext.wearableVersion = '0.1.1'
@@ -111,13 +111,16 @@ if (!ignoreGit) {
   }
 }
 
-// RE specific version name and code
+// Version name and code (MicroG-RE default vs Original microG when -PbasePackageName=com.google)
+def isOriginalMicrogBuild = (basePackageName == "com.google")
+def reGmsVersionName = "7.3.0-dev.2"
+def origGmsVersionName = "0.3.17.255070"
 def ourGmsVersionCode = 255070302
-def ourGmsVersionName = "7.3.0-dev.2"
-def ourVendingVersionCode = ourGmsVersionCode
-def ourVendingVersionName = ourGmsVersionName
+def ourGmsVersionName = isOriginalMicrogBuild ? origGmsVersionName : reGmsVersionName
+def ourVendingVersionCode = isOriginalMicrogBuild ? 84507030 : ourGmsVersionCode
+def ourVendingVersionName = isOriginalMicrogBuild ? "0.3.17.402260" : ourGmsVersionName
 
-logger.lifecycle('Starting build for GMS version {} ({})...', ourGmsVersionName, ourGmsVersionCode)
+logger.lifecycle('Starting build for GMS ({}) version {} ({})...', basePackageName, ourGmsVersionName, ourGmsVersionCode)
 
 allprojects {
     apply plugin: 'idea'

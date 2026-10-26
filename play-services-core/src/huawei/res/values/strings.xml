@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ SPDX-FileCopyrightText: 2023 microG Project Team
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+<resources>
+    <string name="gms_app_name" translatable="false">microG Services</string>
+    <string name="gms_settings_name">microG Settings</string>
+    <string name="gms_settings_summary">Setup microG services.</string>
+    <string name="pref_about_title">About microG</string>
+    <string name="update_up_to_date_message">microG Services v%s is the latest version.</string>
+    <string name="update_notification_permission_message">To let you know when a new update is available, microG Services needs permission to send notifications. Please allow notifications so update alerts can reach you.</string>
+    <string name="morphe_sign_in_with_google_microg_label">Sign in with Google via microG</string>
+    <string name="abi_mismatch_message">"This microG Services build only contains 64-bit (arm64) libraries, but this device is running a 32-bit userspace.
+
+Features that need native Conscrypt/Cronet libraries (account login, TLS, DroidGuard, Maps) will not work properly.
+
+Install the ARMv7 or Universal Huawei (-hw) APK instead."</string>
+</resources>

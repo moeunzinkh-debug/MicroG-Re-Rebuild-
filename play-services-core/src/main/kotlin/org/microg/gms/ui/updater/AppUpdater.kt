@@ -64,9 +64,12 @@ object AppUpdater {
     const val EXTRA_CHECK_UPDATE = "extra_check_update"
 
     private const val PRIMARY_RELEASES_URL = "https://api.github.com/repos/moeunzinkh-debug/MicroG-Re-Rebuild-/releases"
+    private const val PRIMARY_WEB_RELEASES_URL = "https://github.com/moeunzinkh-debug/MicroG-Re-Rebuild-/releases"
     private const val RELEASES_URL = "https://api.github.com/repos/MorpheApp/MicroG-RE/releases"
     private const val UPDATE_URL = "$RELEASES_URL/latest"
     private const val WEB_RELEASES_URL = "https://github.com/MorpheApp/MicroG-RE/releases"
+    private val isOriginalMicrog: Boolean
+        get() = BuildConfig.BASE_PACKAGE_NAME == "com.google"
     private const val PREFS_NAME = "org.microg.gms_updater"
     private const val PREFS_IGNORED_VERSION = "ignored_version"
     private const val PREFS_LAST_CHECK = "last_check"
@@ -129,7 +132,8 @@ object AppUpdater {
     /** Opens [update] download URL in the system browser (no REQUEST_INSTALL_PACKAGES needed). */
     @JvmStatic
     fun runUpdateFlow(activity: Activity, update: UpdateInfo?) {
-        val url = update?.assetUrl?.takeIf { it.isNotEmpty() } ?: WEB_RELEASES_URL
+        val fallback = if (isOriginalMicrog) PRIMARY_WEB_RELEASES_URL else WEB_RELEASES_URL
+        val url = update?.assetUrl?.takeIf { it.isNotEmpty() } ?: fallback
         ensureUpdateNotificationPermission(activity)
         openDownloadInBrowser(activity, url)
     }
@@ -526,6 +530,7 @@ object AppUpdater {
     ): UpdateInfo? {
         fetchLatestUpdateFromRepo(PRIMARY_RELEASES_URL, "$PRIMARY_RELEASES_URL/latest", noiconVariant, includePrerelease, strictVariantMatch)
             ?.let { return it }
+        if (isOriginalMicrog) return null
         return fetchLatestUpdateFromRepo(RELEASES_URL, UPDATE_URL, noiconVariant, includePrerelease, strictVariantMatch)
     }
 
@@ -591,13 +596,25 @@ object AppUpdater {
      * the same build: same ABI (arm64-v8a on 64-bit devices, universal otherwise) and the
      * same launcher-icon variant (normal vs -noicon).
      */
+    private fun matchesBuildEdition(assetLowerName: String): Boolean {
+        if (!assetLowerName.endsWith(".apk")) return false
+        if (assetLowerName.startsWith("com.android.vending") || assetLowerName.contains("companion-vending")) {
+            return false
+        }
+        val isHuaweiGmsAsset = assetLowerName.startsWith("com.google.android.gms") ||
+            assetLowerName.contains("original-huawei") ||
+            assetLowerName.contains("-hw")
+        return isHuaweiGmsAsset == isOriginalMicrog
+    }
+
     private fun pickAsset(
         assets: JsonArray,
         noiconVariant: Boolean,
         strictVariantMatch: Boolean = false
     ): JsonObject? {
         val apks = assets.mapNotNull { it.asJsonObject }.filter { obj ->
-            obj.get("name")?.asString?.lowercase()?.endsWith(".apk") == true
+            val name = obj.get("name")?.asString?.lowercase() ?: ""
+            matchesBuildEdition(name)
         }
         if (apks.isEmpty()) return null
         val arm64Preferred = Build.SUPPORTED_ABIS.any { it == "arm64-v8a" }
@@ -874,7 +891,13 @@ object AppUpdater {
         Thread {
             var resolvedUrl: String? = null
 
-            for (apiUrl in listOf("$PRIMARY_RELEASES_URL?per_page=15", "$RELEASES_URL?per_page=15")) {
+            val apiUrls = if (isOriginalMicrog) {
+                listOf("$PRIMARY_RELEASES_URL?per_page=15")
+            } else {
+                listOf("$PRIMARY_RELEASES_URL?per_page=15", "$RELEASES_URL?per_page=15")
+            }
+
+            for (apiUrl in apiUrls) {
                 if (resolvedUrl != null || isCancelled) break
                 try {
                     val text = httpGet(apiUrl) ?: continue
@@ -884,7 +907,7 @@ object AppUpdater {
                         val assets = root.getAsJsonArray("assets") ?: continue
                         val match = assets.mapNotNull { it.asJsonObject }.firstOrNull { obj ->
                             val name = obj.get("name")?.asString?.lowercase() ?: return@firstOrNull false
-                            if (!name.endsWith(".apk")) return@firstOrNull false
+                            if (!matchesBuildEdition(name)) return@firstOrNull false
                             val hasNoicon = name.contains("noicon")
                             if (hasNoicon != preferNoicon) return@firstOrNull false
                             when {
@@ -907,8 +930,11 @@ object AppUpdater {
             val cleanVersion = BuildConfig.VERSION_NAME.trim().removePrefix("v").removePrefix("V")
                 .substringBefore(" ").substringBefore("(")
             val fileName = directFileNameBuilder(cleanVersion, preferNoicon)
-            val finalUrl = resolvedUrl
-                ?: "https://github.com/MorpheApp/MicroG-RE/releases/download/$cleanVersion/$fileName"
+            val finalUrl = resolvedUrl ?: if (isOriginalMicrog) {
+                PRIMARY_WEB_RELEASES_URL
+            } else {
+                "https://github.com/MorpheApp/MicroG-RE/releases/download/$cleanVersion/$fileName"
+            }
 
             runOnUiThread(activity) {
                 dialog.dismiss()

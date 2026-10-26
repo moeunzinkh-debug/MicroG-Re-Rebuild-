@@ -183,7 +183,12 @@ class AppInstallActivity : AppCompatActivity() {
                 data = Uri.fromParts("package", packageName, null)
             }
         }
-        startActivityForResult(intent, REQUEST_INSTALL_PERMISSION)
+        try {
+            startActivityForResult(intent, REQUEST_INSTALL_PERMISSION)
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to open install permission settings", e)
+            onResult(RESULT_CANCELED, "Install Permission unavailable")
+        }
     }
 
     private fun onResult(result: Int = RESULT_OK, error: String? = null, installPackageName: String? = null) {

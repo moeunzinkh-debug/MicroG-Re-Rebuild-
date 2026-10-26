@@ -25,6 +25,8 @@ import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Bundle;
@@ -343,10 +345,24 @@ public class LoginActivity extends AssistantActivity {
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
     }
 
-    private void start() {
+    private boolean hasNetworkConnection() {
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return false;
+        if (SDK_INT >= 23) {
+            Network network = cm.getActiveNetwork();
+            if (network != null) {
+                NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                if (caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                    return true;
+                }
+            }
+        }
         NetworkInfo networkInfo = cm.getActiveNetworkInfo();
-        if (networkInfo != null && networkInfo.isConnected()) {
+        return networkInfo != null && networkInfo.isConnected();
+    }
+
+    private void start() {
+        if (hasNetworkConnection()) {
             if (LastCheckinInfo.read(this).getAndroidId() == 0) {
                 new Thread(() -> {
                     Runnable next;

@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       publish_github_release:
-        description: "Create/update a GitHub Release with built Debug & Release APKs"
+        description: "Create/update a GitHub Release with MicroG-RE + Original microG Huawei APKs"
         required: false
         default: true
         type: boolean
 
 jobs:
   build:
-    name: "Release & Debug APK build"
+    name: "Release & Debug APK build (MicroG-RE + Huawei Original)"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -83,11 +83,11 @@ jobs:
             echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
           fi
 
-      - name: "Build Release & Debug APKs"
+      - name: "Build MicroG-RE & Original microG Huawei APKs"
         id: version
         run: |
           mkdir -p dist
-          VER="$(grep -oP 'def ourGmsVersionName = "\K[^"]+' build.gradle)"
+          VER="$(grep -oP 'def reGmsVersionName = "\K[^"]+' build.gradle)"
           IS_PRE="false"
           if [[ "$VER" == *-* ]]; then
             IS_PRE="true"
@@ -95,7 +95,7 @@ jobs:
           echo "tag=$VER" >> "$GITHUB_OUTPUT"
           echo "prerelease=$IS_PRE" >> "$GITHUB_OUTPUT"
 
-          build_apk() {
+          build_re_apk() {
             local target="$1"
             local lower="$2"
             local extra_args="$3"
@@ -109,17 +109,42 @@ jobs:
             cp "$built_apk" "dist/$dest_name"
           }
 
-          # Release variants (all 6)
-          build_apk "Release" "release" "" "microg-${VER}.apk"
-          build_apk "Release" "release" "-Pabi=arm64-v8a" "microg-${VER}-icon-arm64-v8a.apk"
-          build_apk "Release" "release" "-Pabi=armeabi-v7a" "microg-${VER}-icon-armeabi-v7a.apk"
-          build_apk "Release" "release" "-PnoIcon=true" "microg-${VER}-noicon.apk"
-          build_apk "Release" "release" "-PnoIcon=true -Pabi=arm64-v8a" "microg-${VER}-noicon-arm64-v8a.apk"
-          build_apk "Release" "release" "-PnoIcon=true -Pabi=armeabi-v7a" "microg-${VER}-noicon-armeabi-v7a.apk"
+          build_hw_apk() {
+            local gradle_task="$1"
+            local out_dir="$2"
+            local extra_args="$3"
+            local dest_name="$4"
+            rm -rf "$out_dir"
+            # shellcheck disable=SC2086
+            ./gradlew "$gradle_task" -PbasePackageName=com.google $extra_args
+            local built_apk
+            built_apk="$(find "$out_dir" -maxdepth 2 -name '*.apk' | head -n 1)"
+            cp "$built_apk" "dist/$dest_name"
+          }
 
-          # Debug variants (Universal + ARM64)
-          build_apk "Debug" "debug" "" "microg-${VER}-debug.apk"
-          build_apk "Debug" "debug" "-Pabi=arm64-v8a" "microg-${VER}-debug-icon-arm64-v8a.apk"
+          # MicroG-RE Release & Debug variants
+          build_re_apk "Release" "release" "" "microg-${VER}.apk"
+          build_re_apk "Release" "release" "-Pabi=arm64-v8a" "microg-${VER}-icon-arm64-v8a.apk"
+          build_re_apk "Release" "release" "-Pabi=armeabi-v7a" "microg-${VER}-icon-armeabi-v7a.apk"
+          build_re_apk "Release" "release" "-PnoIcon=true" "microg-${VER}-noicon.apk"
+          build_re_apk "Release" "release" "-PnoIcon=true -Pabi=arm64-v8a" "microg-${VER}-noicon-arm64-v8a.apk"
+          build_re_apk "Release" "release" "-PnoIcon=true -Pabi=armeabi-v7a" "microg-${VER}-noicon-armeabi-v7a.apk"
+          build_re_apk "Debug" "debug" "" "microg-${VER}-debug.apk"
+          build_re_apk "Debug" "debug" "-Pabi=arm64-v8a" "microg-${VER}-debug-icon-arm64-v8a.apk"
+
+          # Free intermediate default build outputs before Huawei builds
+          rm -rf play-services-core/build
+
+          # Original microG Huawei (-hw) Release & Debug + Companion FakeStore (-hw)
+          build_hw_apk ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-arm64-v8a.apk"
+          build_hw_apk ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-armeabi-v7a.apk"
+          build_hw_apk ":play-services-core:assembleHuaweiRelease" "play-services-core/build/outputs/apk/huawei/release" "" "com.google.android.gms-255070302-hw.apk"
+          build_hw_apk ":vending-app:assembleHuaweiRelease" "vending-app/build/outputs/apk/huawei/release" "" "com.android.vending-84507030-hw.apk"
+
+          build_hw_apk ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=arm64-v8a" "com.google.android.gms-255070302-hw-debug-arm64-v8a.apk"
+          build_hw_apk ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "-Pabi=armeabi-v7a" "com.google.android.gms-255070302-hw-debug-armeabi-v7a.apk"
+          build_hw_apk ":play-services-core:assembleHuaweiDebug" "play-services-core/build/outputs/apk/huawei/debug" "" "com.google.android.gms-255070302-hw-debug.apk"
+          build_hw_apk ":vending-app:assembleHuaweiDebug" "vending-app/build/outputs/apk/huawei/debug" "" "com.android.vending-84507030-hw-debug.apk"
 
       - name: "Verify signatures & permissions and generate SHA256SUMS"
         run: |
@@ -129,7 +154,7 @@ jobs:
       - name: "Upload APKs artifact"
         uses: actions/upload-artifact@v7
         with:
-          name: MicroG-RE-${{ steps.version.outputs.tag }}-APKs
+          name: MicroG-RE-and-Huawei-${{ steps.version.outputs.tag }}-APKs
           if-no-files-found: error
           path: dist/*
 
@@ -138,7 +163,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: MicroG-RE ${{ steps.version.outputs.tag }} (Debug & Release)
+          name: MicroG-RE ${{ steps.version.outputs.tag }} + Original microG Huawei (-hw)
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
           files: |
             dist/*.apk

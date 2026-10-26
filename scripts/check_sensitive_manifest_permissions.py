@@ -29,8 +29,7 @@ PERMISSION_TAGS = {
     "uses-permission-sdk-m",
 }
 COMPONENT_TAGS = {"activity", "activity-alias", "provider", "receiver", "service"}
-# vending-app is the standalone FakeStore module (not merged into MicroG-RE play-services-core).
-EXCLUDED_DIRS = {".git", ".gradle", "build", "dist", "apks", "vending-app"}
+EXCLUDED_DIRS = {".git", ".gradle", "build", "dist", "apks"}
 
 
 def source_manifests(root: Path) -> list[Path]:
