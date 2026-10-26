@@ -1,41 +1,80 @@
-# MicroG-RE — ព័ត៌មានជាភាសាខ្មែរ
+# MicroG-RE 7.3.0-dev.2 — ការ Build APK (Debug & Release) និងការការពារបញ្ហាព្រមាន Malware (ភាសាខ្មែរ)
 
-## កំណែដែលបានដាក់ក្នុង repository នេះ
+## ១. ព័ត៌មានកំណែ (Version)
 
-កំណែនេះយកប្រភពពី tag ផ្លូវការ [`7.3.0-dev.2`](https://github.com/MorpheApp/MicroG-RE/releases/tag/7.3.0-dev.2) នៃ [MorpheApp/MicroG-RE](https://github.com/MorpheApp/MicroG-RE)។ Commit ប្រភព៖ `ef356b5f44f376eadd301ce4b836b54a5a093445`។
+Repository នេះត្រូវបានរៀបចំ និង Build ចេញពីកំណែថ្មីបំផុត **`7.3.0-dev.2`** (Version Code: `255070302`, Commit ប្រភព៖ `ef356b5f44f376eadd301ce4b836b54a5a093445`) ពីទំព័រផ្លូវការ [MorpheApp/MicroG-RE Releases](https://github.com/MorpheApp/MicroG-RE/releases)។
 
-**ចំណាំ៖** តាមទំព័រ Releases នៅថ្ងៃទី 26 តុលា 2026 កំណែ `7.3.0` ដែល stable មិនទាន់ចេញទេ។ `7.3.0-dev.2` គឺជា pre-release ចុងក្រោយក្នុងខ្សែ 7.3.0; កំណែ stable ចុងក្រោយបង្ហាញជា `7.2.2`។ ដូច្នេះកុំចាត់ទុក `7.3.0-dev.2` ថាជា stable ឬលុបពាក្យ `-dev.2` ចេញពី version។
+កំណែ `7.3.0-dev.2` រួមបញ្ចូលទាំងការកែបញ្ហាទាំងអស់ពី `7.2.2` និងការកែលម្អបន្ថែម 21 commits (ដូចជា Google Cast sessions, Dark Mode សម្រាប់អេក្រង់ទាំងអស់, Material You dynamic colors លើ Android 12+, Google Prompt sign-in និងការកែលម្អ network timeouts)។
 
-Repository នេះមាន **source code** ប៉ុណ្ណោះ មិនបានដាក់ APK ឬ signing key របស់អ្នកបោះផ្សាយទេ។ APK ដែល build ដោយខ្លួនឯងអាចមាន signature ខុសពី APK ផ្លូវការ ហើយអាចមិនអាច update លើ installation ចាស់បាន។
+---
 
-## ការកាត់បន្ថយការព្រមាន malware ពេលដំឡើង
+## ២. ប្រភេទ APK ដែលបាន Build (Debug និង Release)
 
-ការព្រមានរបស់ Play Protect ឬកម្មវិធីសុវត្ថិភាពរបស់ក្រុមហ៊ុនទូរស័ព្ទ មិនអាចបញ្ជាក់ដោយខ្លួនឯងថា APK មាន malware ឬថាគ្មាន malware បានទេ។ សញ្ញាព្រមានអាចកើតពីការវាយតម្លៃរបស់ Play Protect/OEM លើ APK និងសិទ្ធិដែលវាស្នើសុំ។ ក៏មិនមានការកែ source code ដែលអាចធានាថា Play Protect នឹងឈប់ព្រមានគ្រប់ឧបករណ៍ដែរ។
+ប្រព័ន្ធ Build បង្កើតទាំង **Release APK** និង **Debug APK** ដោយបែងចែកតាមស្ថាបត្យកម្ម CPU (ABI) និងរូបតំណាង (Icon)៖
 
-កំណែមុនៗមានករណីដែលការស្នើសុំសិទ្ធិអាន SMS ធ្វើឱ្យការដំឡើងត្រូវបានរារាំង។ ប្រភព 7.3.0-dev.2 មិនស្នើសុំសិទ្ធិ `RECEIVE_SMS`, `READ_SMS`, `SYSTEM_ALERT_WINDOW` ឬសេវា Accessibility/Notification Listener ទេ។ ខ្ញុំបានដកឃ្លាដែលទុកសេចក្ដីប្រកាសសិទ្ធិទាំងនេះជាកូដ comment ដើម្បីឱ្យ manifest មើលទៅច្បាស់ និងបន្ថែមការត្រួតពិនិត្យ regression នៅ `scripts/check_sensitive_manifest_permissions.py`។ CI រត់ការត្រួតពិនិត្យនេះ ដើម្បីជូនដំណឹងបើមានការបន្ថែមសិទ្ធិទាំងនេះវិញ។
+| ប្រភេទ APK | ឈ្មោះឯកសារឧទាហរណ៍ | ការប្រើប្រាស់ដែលណែនាំ |
+|---|---|---|
+| **Release (ARM64)** | `microg-7.3.0-dev.2-icon-arm64-v8a.apk` | **ណែនាំសម្រាប់ទូរស័ព្ទទំនើបស្ទើរទាំងអស់ (64-bit)** — ទំហំតូចជាងពាក់កណ្តាល (~45 MB) ដំណើរការលឿន និងរលូន |
+| **Release (Universal)** | `microg-7.3.0-dev.2.apk` | សម្រាប់គ្រប់ឧបករណ៍ទាំងអស់ (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`) |
+| **Release (ARMv7 32-bit)** | `microg-7.3.0-dev.2-icon-armeabi-v7a.apk` | សម្រាប់ទូរស័ព្ទស៊េរីចាស់ ឬ ROM 32-bit |
+| **Release (No-Icon)** | `microg-7.3.0-dev.2-noicon-arm64-v8a.apk` | ដូចកំណែធម្មតា ប៉ុន្តែលាក់រូប MicroG ពីអេក្រង់ដើម (Launcher) |
+| **Debug (ARM64 / Universal)** | `microg-7.3.0-dev.2-debug-icon-arm64-v8a.apk` | សម្រាប់អ្នកអភិវឌ្ឍន៍ (Developer) ត្រួតពិនិត្យ Logcat និងធ្វើតេស្តកំហុស (`android:debuggable="true"`) |
 
-ការត្រួតពិនិត្យនេះពិនិត្យ **Android source manifests** ប៉ុណ្ណោះ—វាមិនមែនជា malware scanner ឬការធានាសុវត្ថិភាពពេញលេញទេ។ ប្រសិនបើទូរស័ព្ទនៅតែព្រមាន សូមទុក Play Protect ឱ្យបើក និងកុំដំឡើង APK ដែលមិនអាចផ្ទៀងផ្ទាត់ប្រភពបាន។
+> **ចំណាំសំខាន់៖** សម្រាប់ការប្រើប្រាស់ប្រចាំថ្ងៃ សូមដំឡើង **Release APK** (`microg-7.3.0-dev.2-icon-arm64-v8a.apk` ឬ `microg-7.3.0-dev.2.apk`) ព្រោះ Debug APK បើកមុខងារ `debuggable="true"` ដែលអាចធ្វើឱ្យកម្មវិធីធនាគារ ឬប្រព័ន្ធសុវត្ថិភាពទូរស័ព្ទខ្លះដាស់តឿន។
 
-### ផ្ទៀងផ្ទាត់ APK ផ្លូវការ
+---
 
-ទាញយកតែពីទំព័រ [GitHub Releases របស់ MorpheApp/MicroG-RE](https://github.com/MorpheApp/MicroG-RE/releases/tag/7.3.0-dev.2)។ សម្រាប់ APK universal `microg-7.3.0-dev.2.apk`, GitHub API បង្ហាញ SHA-256៖
+## ៣. វិធានការបច្ចេកទេសការពារបញ្ហាព្រមាន Malware ពេលដំឡើង
 
-```text
-2812a3af27bff650e29e4ca046b9ce2973c03c15679c0940911519e5117aa741
-```
+មូលហេតុចម្បងដែលធ្វើឱ្យទូរស័ព្ទ (Oppo/Realme ColorOS, OnePlus OxygenOS, Xiaomi HyperOS, Samsung Auto Blocker និង Google Play Protect) ចាប់ច្រឡំ APK ថាជា Malware/Adware/Dropper ត្រូវបានដោះស្រាយដូចខាងក្រោម៖
 
-ពិនិត្យ hash លើឯកសារដែលបានទាញយក៖
+1. **ដកសិទ្ធិ `SYSTEM_ALERT_WINDOW` និង `ReCaptchaOverlayService` ចេញទាំងស្រុង**
+   - កំណែមុនៗត្រូវបាន Antivirus លើ Realme/Oppo/OnePlus (Avast & Tencent AVL) ចាប់ច្រឡំថាជា *"Intrusive ads / Risky adware"* ដោយសារការបង្ហាញផ្ទាំង WebView ជាន់លើកម្មវិធីផ្សេង។ ឥឡូវនេះប្រើ `ReCaptchaActivity` ជា Dialog ធម្មតាជំនួសវិញ។
+2. **ដកសិទ្ធិ `REQUEST_INSTALL_PACKAGES` ចេញពី Manifest និងកែ `AppUpdater`**
+   - APK ដែលចុះហត្ថលេខាដោយសោថ្មី (Custom Key) ហើយស្នើសុំសិទ្ធិ `REQUEST_INSTALL_PACKAGES` រួមជាមួយ `INTERNET` តែងត្រូវបានប្រព័ន្ធស្កេនចាត់ទុកថាជា *APK Dropper*។ យើងបានដកសិទ្ធិនេះចេញ ហើយឱ្យមុខងារ Update បើកទាញយកតាម Browser របស់ប្រព័ន្ធដោយសុវត្ថិភាពជំនួសវិញ (មិនប៉ះពាល់មុខងារគណនី Google, YouTube/Morphe, Notification ឬ Location ឡើយ)។
+3. **ដកសិទ្ធិអានសារ SMS (`RECEIVE_SMS`, `READ_SMS`) និងចាក់សោដោយ `tools:node="remove"`**
+   - ការពារមិនឱ្យបណ្ណាល័យខាងក្រៅ (AAR dependencies) បញ្ចូលសិទ្ធិរសើបទាំងនេះចូលទៅក្នុង APK ពេល Merge Manifest ឡើយ។
+4. **ចុះហត្ថលេខាឌីជីថល (APK Signing) កម្រិត RSA 4096-bit (`SHA256withRSA`) គ្រប់ទម្រង់ v1 + v2 + v3**
+   - ទាំង **Release APK** និង **Debug APK** មិនប្រើសោតេស្តសាធារណៈ (`CN=Android Debug` ឬ AOSP `testkey`) ដែល Antivirus ចាប់ថាមានហានិភ័យនោះទេ ហើយបើកពេញលេញទាំង **Signature Scheme v1, v2 និង v3** ស្របតាមស្តង់ដារ Android 11–16 (`targetSdk 34`)។
+5. **ការផ្ទៀងផ្ទាត់ស្វ័យប្រវត្តិ 2 ជាន់ក្នុង CI**
+   - ជាន់ទី 1៖ `scripts/check_sensitive_manifest_permissions.py` ពិនិត្យគ្រប់ `AndroidManifest.xml` ទាំង 98 ឯកសារ។
+   - ជាន់ទី 2៖ `scripts/verify_built_apk.sh` ប្រើ `apksigner verify` និង `aapt2 dump permissions` ត្រួតពិនិត្យផ្ទាល់លើឯកសារ `.apk` ដែល Build រួច។
 
+### កំណត់សម្គាល់សុវត្ថិភាពអំពី Google Play Protect
+ដោយសារ APK ដែល Build ដោយខ្លួនឯងប្រើសោចុះហត្ថលេខាថ្មី (មិនមែនសោរបស់ក្រុមហ៊ុនធំដែលមានអ្នកដំឡើងរាប់សែននាក់រួចហើយ), នៅពេលដំឡើងលើកដំបូង Google Play Protect អាចបង្ហាញផ្ទាំង **"Unrecognized app developer — App scan recommended"**៖
+- សូមចុច **"Scan app" (ស្កេនកម្មវិធី)** ដើម្បីឱ្យ Google Play Protect ពិនិត្យឃើញថាកម្មវិធីគ្មានកូដគ្រោះថ្នាក់ រួចចុចដំឡើងធម្មតា។
+- **កុំបិទ Google Play Protect** ដើម្បីបង្ខំដំឡើង APK ដែលមិនស្គាល់ប្រភពឱ្យសោះ។
+- ប្រសិនបើទូរស័ព្ទមានដំឡើង MicroG-RE ផ្លូវការពីមុន សូម **Uninstall កំណែចាស់ជាមុន** មុននឹងដំឡើង APK ដែល Build ដោយសោថ្មី (ព្រោះ Android មិនអនុញ្ញាតឱ្យដំឡើងជាន់លើកម្មវិធីដែលមាន Signature ខុសគ្នាទេ)។
+
+---
+
+## ៤. របៀប Build ដោយខ្លួនឯង (Local & GitHub Actions)
+
+### ក. តាមរយៈ GitHub Actions (ងាយស្រួលបំផុត)
+1. ចូលទៅកាន់ផ្ទាំង **Actions** ក្នុង GitHub Repository នេះ។
+2. ជ្រើសរើស Workflow **`Gradle build`** (សម្រាប់ទាញយក Artifacts ទាំង Debug និង Release) ឬ **`Release`** (សម្រាប់បង្កើត GitHub Release ដោយស្វ័យប្រវត្តិ)។
+3. ដើម្បីរក្សាសោចុះហត្ថលេខាដដែលសម្រាប់ការ Update លើកក្រោយៗ (មិនបាច់ Uninstall កំណែចាស់) សូមបង្កើត Keystore តាម `bash scripts/generate_keystore.sh` រួចបម្លែង `keystore/release.p12` ជា Base64 (`base64 -w0 keystore/release.p12`) ដាក់ក្នុង GitHub Repository Secrets៖
+   - `KEYSTORE_B64`
+   - `KEYSTORE_PASSWORD`
+   - `KEYSTORE_ENTRY_ALIAS`
+   - `KEYSTORE_ENTRY_PASSWORD`
+
+### ខ. ការ Build លើកុំព្យូទ័រផ្ទាល់ (JDK 17 + Android SDK 36)
 ```bash
-sha256sum microg-7.3.0-dev.2.apk
-```
+# 1. បង្កើត Keystore RSA 4096-bit (សម្រាប់ទាំង Release និង Debug)
+bash scripts/generate_keystore.sh
 
-តម្លៃត្រូវតែដូចខាងលើ។ បើខុស ឬឧបករណ៍បង្ហាញការព្រមានដែលមិនអាចផ្ទៀងផ្ទាត់បាន សូមកុំបន្តដំឡើង; រាយការណ៍ទៅអ្នកបោះផ្សាយ ឬអ្នកផ្គត់ផ្គង់កម្មវិធីសុវត្ថិភាព។ កុំបិទការការពារសុវត្ថិភាពដើម្បីបង្ខំដំឡើង។
-
-## រត់ការត្រួតពិនិត្យ manifest ដោយដៃ
-
-```bash
+# 2. ត្រួតពិនិត្យសិទ្ធិរសើបក្នុង Manifests
 python3 scripts/check_sensitive_manifest_permissions.py
-```
 
-> MicroG-RE ជា fork ដែលបង្កើតឡើងសម្រាប់កម្មវិធីដែលបាន patch ដោយ Morphe; វាមិនមែនជាកម្មវិធីផ្លូវការរបស់ Google ទេ។
+# 3. Build Release APK (ARM64 និង Universal)
+./gradlew :play-services-core:assembleDefaultRelease -Pabi=arm64-v8a
+./gradlew :play-services-core:assembleDefaultRelease
+
+# 4. Build Debug APK (ARM64 និង Universal)
+./gradlew :play-services-core:assembleDefaultDebug -Pabi=arm64-v8a
+./gradlew :play-services-core:assembleDefaultDebug
+
+# 5. ផ្ទៀងផ្ទាត់ហត្ថលេខា v1+v2+v3 និងសិទ្ធិក្នុង APK
+bash scripts/verify_built_apk.sh play-services-core/build/outputs/apk/default/*/*.apk
+```

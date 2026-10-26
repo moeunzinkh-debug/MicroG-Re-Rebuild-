@@ -23,10 +23,14 @@ jobs:
 
       - name: Back merge main to dev
         run: |
+          if ! git ls-remote --exit-code --heads origin dev >/dev/null 2>&1; then
+            echo "No 'dev' branch exists on origin; skipping back-merge."
+            exit 0
+          fi
+
           git fetch origin dev
-          
+
           # Attempt to fast-forward dev to main.
-          # This will succeed without a merge commit if dev is strictly behind main.
           if git push origin origin/main:dev; then
             echo "dev was behind main. Successfully fast-forwarded dev to main (no merge commit)."
           else

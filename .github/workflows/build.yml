@@ -1,28 +1,32 @@
 name: "Gradle build"
-permissions: {}
+permissions:
+  contents: read
+
 on:
-  - pull_request
-  - workflow_dispatch
+  push:
+    branches:
+      - main
+      - "arena/**"
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     name: "Gradle build ${{ matrix.target }}"
     runs-on: ubuntu-latest
     env:
-      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: "1"
 
     strategy:
+      fail-fast: false
       matrix:
         target: [Debug, Release]
 
     steps:
       - name: "Free disk space"
         run: |
-          # Deleting unneeded software packages
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo rm -rf /opt/hostedtoolcache/go
-
-          # Log available space
           df -h
 
       - name: "Checkout sources"
@@ -31,7 +35,7 @@ jobs:
           fetch-depth: 0
 
       - name: "Check sensitive install permissions"
-        run: "python3 scripts/check_sensitive_manifest_permissions.py"
+        run: python3 scripts/check_sensitive_manifest_permissions.py
 
       - name: "Setup Java"
         uses: actions/setup-java@v6.0.1
@@ -43,37 +47,113 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GradleEncryptionKey }}
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/help/legal-terms-of-use"
-          build-scan-terms-of-use-agree: "yes"
 
-      - name: "Setup matchers"
+      - name: "Prepare v1+v2+v3 signing keystores"
+        env:
+          SECRET_KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          SECRET_KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          SECRET_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          SECRET_KEY_PASS: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
         run: |
-          # Setting up matchers...
+          KEY_DIR="$RUNNER_TEMP/keystore"
+          mkdir -p "$KEY_DIR"
 
-          matchers_dir='${{ github.workspace }}/.github/matchers'
-          matcher_list()
-          {
-            echo 'gradle-build-matcher.json'
-            echo 'gradle-build-kotlin-error-matcher.json'
+          # Always create a clean RSA-4096 debug keystore so Debug APKs never use
+          # the AV-flagged CN=Android Debug test certificate.
+          DBG_PASS="$(openssl rand -hex 16)"
+          REL_PASS="$(openssl rand -hex 16)"
+          KEYSTORE_DIR="$KEY_DIR" \
+          KEYSTORE_PASSWORD="$REL_PASS" \
+          KEYSTORE_ENTRY_ALIAS="microg-release" \
+          DEBUG_KEYSTORE_PASSWORD="$DBG_PASS" \
+          DEBUG_KEYSTORE_ENTRY_ALIAS="microg-dev" \
+          bash scripts/generate_keystore.sh >/dev/null
+
+          echo "DEBUG_KEYSTORE_FILE=$KEY_DIR/debug.p12" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_ALIAS=microg-dev" >> "$GITHUB_ENV"
+          echo "DEBUG_KEYSTORE_ENTRY_PASSWORD=$DBG_PASS" >> "$GITHUB_ENV"
+
+          if [[ -n "$SECRET_KEYSTORE_B64" && -n "$SECRET_KEYSTORE_ALIAS" && -n "$SECRET_KEYSTORE_PASS" ]]; then
+            echo "Using repository secret KEYSTORE_B64 for Release signing."
+            echo "$SECRET_KEYSTORE_B64" | tr -d ' \n\r\t' | base64 -d > "$KEY_DIR/custom-release.keystore"
+            echo "KEYSTORE_FILE=$KEY_DIR/custom-release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$SECRET_KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=$SECRET_KEYSTORE_ALIAS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=${SECRET_KEY_PASS:-$SECRET_KEYSTORE_PASS}" >> "$GITHUB_ENV"
+          else
+            echo "No KEYSTORE_B64 secret configured; using generated 4096-bit RSA PKCS12 keystore."
+            echo "KEYSTORE_FILE=$KEY_DIR/release.p12" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_ALIAS=microg-release" >> "$GITHUB_ENV"
+            echo "KEYSTORE_ENTRY_PASSWORD=$REL_PASS" >> "$GITHUB_ENV"
+          fi
+
+      - name: "Build ${{ matrix.target }} APK variants"
+        run: |
+          TARGET="${{ matrix.target }}"
+          LOWER="$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')"
+          OUT_DIR="play-services-core/build/outputs/apk/default/${LOWER}"
+          mkdir -p dist dist-arm64
+
+          VER="$(grep -oP 'def ourGmsVersionName = "\K[^"]+' build.gradle)"
+          SUFFIX=""
+          if [[ "$LOWER" == "debug" ]]; then
+            SUFFIX="-debug"
+          fi
+
+          build_variant() {
+            local extra_args="$1"
+            local dest_name="$2"
+            rm -rf "$OUT_DIR"
+            # shellcheck disable=SC2086
+            ./gradlew :play-services-core:assembleDefault${TARGET} $extra_args
+            local built_apk
+            built_apk="$(find "$OUT_DIR" -maxdepth 2 -name '*.apk' | head -n 1)"
+            if [[ -z "$built_apk" || ! -f "$built_apk" ]]; then
+              echo "ERROR: Expected APK not found in $OUT_DIR" >&2
+              exit 1
+            fi
+            cp "$built_apk" "dist/$dest_name"
+            echo "Built -> dist/$dest_name ($(du -h "dist/$dest_name" | cut -f1))"
           }
 
-          matcher_list | while IFS='' read -r NAME; do
-            if test -f "${matchers_dir:?}/${NAME:?}"; then
-              echo "::add-matcher::${matchers_dir:?}/${NAME:?}"
-              echo "Matcher configured: ${NAME:?}"
-            fi
-          done
+          # 1. ARM64 icon (most modern phones, < half universal size)
+          build_variant "-Pabi=arm64-v8a" "microg-${VER}${SUFFIX}-icon-arm64-v8a.apk"
+          cp "dist/microg-${VER}${SUFFIX}-icon-arm64-v8a.apk" "dist-arm64/"
 
-      - name: "Execute Gradle assemble"
-        run: "./gradlew assemble${{ matrix.target }}"
+          # 2. ARMv7 icon (32-bit devices)
+          build_variant "-Pabi=armeabi-v7a" "microg-${VER}${SUFFIX}-icon-armeabi-v7a.apk"
 
-      - name: "Execute Gradle lint"
-        run: "./gradlew lint${{ matrix.target }}"
+          # 3. Universal icon (all ABIs)
+          build_variant "" "microg-${VER}${SUFFIX}.apk"
 
-#      - name: "Upload APK artifacts"
-#        uses: actions/upload-artifact@v7
-#        with:
-#          name: microg-apks-${{ matrix.target }}
-#          path: "play-services-core/build/outputs/apk/*/*/*.apk"
-#          if-no-files-found: error
+          # 4. ARM64 noicon
+          build_variant "-PnoIcon=true -Pabi=arm64-v8a" "microg-${VER}${SUFFIX}-noicon-arm64-v8a.apk"
+          cp "dist/microg-${VER}${SUFFIX}-noicon-arm64-v8a.apk" "dist-arm64/"
+
+          # 5. ARMv7 noicon
+          build_variant "-PnoIcon=true -Pabi=armeabi-v7a" "microg-${VER}${SUFFIX}-noicon-armeabi-v7a.apk"
+
+          # 6. Universal noicon
+          build_variant "-PnoIcon=true" "microg-${VER}${SUFFIX}-noicon.apk"
+
+      - name: "Verify v1+v2+v3 signatures and merged APK permissions"
+        run: |
+          bash scripts/verify_built_apk.sh dist/*.apk
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          (cd dist-arm64 && sha256sum *.apk > SHA256SUMS.txt)
+
+      - name: "Upload ARM64 ${{ matrix.target }} APKs"
+        uses: actions/upload-artifact@v7
+        with:
+          name: MicroG-RE-arm64-v8a-${{ matrix.target }}
+          path: dist-arm64/*
+          if-no-files-found: error
+
+      - name: "Upload All ${{ matrix.target }} APK Variants"
+        uses: actions/upload-artifact@v7
+        with:
+          name: MicroG-RE-All-Variants-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error

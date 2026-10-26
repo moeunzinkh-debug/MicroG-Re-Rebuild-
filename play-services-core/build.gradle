@@ -211,10 +211,62 @@ android {
         disable 'FlowOperatorInvokedInComposition', 'CoroutineCreationDuringComposition', 'StateFlowValueCalledInComposition'
     }
 
+    def envOrProp = { String envKey, String propKey, String fallback = "" ->
+        def fromEnv = providers.environmentVariable(envKey).orNull
+        if (fromEnv != null && !fromEnv.isEmpty()) return fromEnv
+        def fromProp = localProperties.getProperty(propKey, "")
+        return !fromProp.isEmpty() ? fromProp : fallback
+    }
+
+    def releaseStorePath = envOrProp("KEYSTORE_FILE", "signing.storeFile", rootProject.file("keystore/release.p12").absolutePath)
+    def releaseStoreFile = file(releaseStorePath)
+    def releaseStorePass = envOrProp("KEYSTORE_PASSWORD", "signing.storePassword", "")
+    def releaseKeyAlias = envOrProp("KEYSTORE_ENTRY_ALIAS", "signing.keyAlias", "")
+    def releaseKeyPass = envOrProp("KEYSTORE_ENTRY_PASSWORD", "signing.keyPassword", releaseStorePass)
+    def hasReleaseKeystore = releaseStoreFile.exists() && !releaseStorePass.isEmpty() && !releaseKeyAlias.isEmpty()
+
+    def debugStorePath = envOrProp("DEBUG_KEYSTORE_FILE", "signing.debugStoreFile", rootProject.file("keystore/debug.p12").absolutePath)
+    def debugStoreFile = file(debugStorePath)
+    def debugStorePass = envOrProp("DEBUG_KEYSTORE_PASSWORD", "signing.debugStorePassword", "")
+    def debugKeyAlias = envOrProp("DEBUG_KEYSTORE_ENTRY_ALIAS", "signing.debugKeyAlias", "")
+    def debugKeyPass = envOrProp("DEBUG_KEYSTORE_ENTRY_PASSWORD", "signing.debugKeyPassword", debugStorePass)
+    def hasCustomDebugKeystore = debugStoreFile.exists() && !debugStorePass.isEmpty() && !debugKeyAlias.isEmpty()
+
+    signingConfigs {
+        debug {
+            if (hasCustomDebugKeystore) {
+                storeFile debugStoreFile
+                storePassword debugStorePass
+                keyAlias debugKeyAlias
+                keyPassword debugKeyPass
+            }
+            v1SigningEnabled true
+            v2SigningEnabled true
+            v3SigningEnabled true
+        }
+        if (hasReleaseKeystore) {
+            releaseCustom {
+                storeFile releaseStoreFile
+                storePassword releaseStorePass
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPass
+                v1SigningEnabled true
+                v2SigningEnabled true
+                v3SigningEnabled true
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.releaseCustom
+            }
         }
     }
 
@@ -268,7 +320,8 @@ if (file('user.gradle').exists()) {
 }
 
 android.applicationVariants.all { variant ->
+    def buildSuffix = variant.buildType.name == "debug" ? "-debug" : (variant.signingConfig != null ? "" : "-unsigned")
     variant.outputs.each { output ->
-        output.outputFileName = variant.applicationId + "-" + variant.versionCode + variant.versionName.substring(version.length()) + ".apk"
+        output.outputFileName = variant.applicationId + "-" + variant.versionCode + variant.versionName.substring(version.length()) + buildSuffix + ".apk"
     }
 }
