@@ -151,3 +151,49 @@ bash scripts/verify_built_apk.sh \
   play-services-core/build/outputs/apk/*/*/*.apk \
   vending-app/build/outputs/apk/*/*/*.apk
 ```
+
+---
+
+## ៧. ភាពត្រូវគ្នារវាង Patched App និង GMS Build (Vendor Compatibility) — មុខងារថ្មី
+
+### ហេតុអ្វីកម្មវិធីខ្លះ «ភ្ជាប់មិនបាន» ទោះដំឡើង microG រួចហើយ?
+
+កម្មវិធីដែលបានបំណះ (ReVanced / Morphe) **ត្រូវបានចងភ្ជាប់អចិន្ត្រៃយ៍ទៅ GMS package តែមួយ** តាំងពីពេលបំណះ៖
+patch ប្តូរ `com.google.android.gms` ក្នុង app ទៅជាឈ្មោះ package ដែលអ្នកកំណត់ក្នុង `GmsCoreVendorGroupId`។
+
+| App ត្រូវបានបំណះសម្រាប់ | ភ្ជាប់បានតែទៅ | ដំឡើងដោយ |
+|---|---|---|
+| `app.revanced.android.gms` | 🔴 MicroG-RE `7.3.0-dev.2` | Tag `microg-re-v7.3.0-dev.2` |
+| `org.microg.android.gms` | 🟢 microG Personal | Tag `microg-personal-v0.3.17.255070` |
+| `com.google.android.gms` | 🔵 Original microG Huawei (`-hw`) ឬ Play Services ពិត | Tag `microg-original-hw-v0.3.17.255070` |
+
+ដូច្នេះបើ app មួយត្រូវបានបំណះសម្រាប់ `app.revanced.android.gms` វានឹង**មិនភ្ជាប់**ទៅ `microG Personal` (`org.microg.android.gms`) ឡើយ ទោះដំឡើងទាំងពីរទន្ទឹមគ្នាក៏ដោយ — នេះជាដែនកំណត់របស់ Android ខ្លួនឯង មិនមែន bug របស់ microG ទេ។
+
+### អ្វីដែលបានបន្ថែមក្នុង build នេះ (Self-Check → **GMS compatibility**)
+
+1. បង្ហាញថា **build នេះឆ្លើយតបជា package អ្វី** (ឧ. `microG Personal (org.microg.android.gms)`).
+2. បញ្ជី **GMS ទាំងអស់ដែលបានដំឡើងទន្ទឹមគ្នា** (MicroG-RE, Morphe GmsCore, microG Personal, Vanced microG, Play Services) ជាមួយ Chip ចុចបើក App Info។
+3. ស្កេនកម្មវិធីដែលបានបំណះទាំងអស់ (`*.morphe.android.*`, `*.revanced.android.*`, `*.rvx.android.*`, `*.vanced.android.*`, `anddea.youtube`, `bill.youtube`) ហើយអានពី DEX ថាតើវាត្រូវការ GMS package ណា៖
+   - ✅ `YouTube is patched for MicroG-RE (this build)` → ត្រូវគ្នា។
+   - ⚠️ `YouTube is patched for MicroG-RE (installed side by side)` → ត្រូវគ្នាដែរ ព្រោះ build នោះដំឡើងនៅ។
+   - ❌ `YouTube is patched for MicroG-RE, which is not installed` → ដំឡើង tag `microg-re-v7.3.0-dev.2` ឬបំណះឡើងវិញជាមួយ `GmsCoreVendorGroupId = org.microg`។
+4. លទ្ធផលស្កេនត្រូវបាន **Cache** តាមទំហំ/កាលបរិច្ឆេទ APK ដូច្នេះបើក Self-Check លើកទី ២ ភ្លាមៗ (ស្កេនតែ APK ដែលបានបំណះ មិនស្កេន app ទាំងអស់)។
+
+### របៀបបំណះឲ្យត្រូវនឹង build ដែលអ្នកប្រើ
+
+- **ReVanced / Piko / RVX Manager**: ក្នុង patch options កំណត់ **`GmsCoreVendorGroupId`** (ឈ្មោះអាចខុសគ្នា: `GmsCore vendor group id` / `Vendor group id`)៖
+  - ប្រើ **`org.microg`** → ត្រូវនឹង 🟢 microG Personal (`org.microg.android.gms`)
+  - ប្រើ **`app.revanced`** → ត្រូវនឹង 🔴 MicroG-RE (`app.revanced.android.gms`)
+- **Morphe Manager**: ជម្រើសឈ្មោះស្រដៀងគ្នា ហើយ default គឺ `app.morphe`.
+- បើអ្នកបំណះដោយប្រើ **`GmsCore support`** patch ធម្មតា ហើយមិនប្តូរ vendor id ទេ → វានឹងចងទៅ vendor ដើមរបស់ patcher នោះ។
+
+### អ្វីដែល **មិនអាច** កែនៅក្នុង microG បាន (ត្រូវដឹងឲ្យច្បាស់)
+
+| កម្មវិធី | ស្ថានភាព | ដំណោះស្រាយត្រឹមត្រូវ |
+|---|---|---|
+| **ChatGPT, Grok, Google Wallet, ធនាគារ** ដែលតម្រូវ Play Integrity | ❌ មិនអាចគាំទ្របាន — ត្រូវការ hardware attestation ពី Google ពិត | ប្រើ PWA: `chatgpt.com` / `grok.com` → Chrome/Brave menu → **Add to Home Screen**; ឬ Grok ក្នុង X ដែលបានបំណះ |
+| **Facebook, Messenger, Telegram** (unpatched) | ⚠️ មិនត្រូវការ microG ទេ | ដំឡើង APK ផ្លូវការ (Telegram ពី `telegram.org/android`); FB/Messenger ប្រើ HMS Push លើ Huawei |
+| **App unpatched ដែល hardcode `com.google.android.gms`** | ⚠️ បានតែជាមួយ build `com.google.*` | ប្រើ 🔵 `-hw` edition (តែលើ Nova 4e ត្រូវដោះ `priv-app` conflict ជាមុន) ឬបំណះ app នោះ |
+| **HMS Push (AppGallery push) សម្រាប់ app ក្រៅ AppGallery** | ❌ មិនអាច — ត្រូវការ AGC app registration + AppGallery distribution | ប្រើ microG GCM (MCS) ធម្មតា ឬបើក Autostart/បិទ battery optimization លើ EMUI |
+
+> សេចក្តីសង្ខេប៖ microG អាចគាំទ្រ **patched apps**, **Contacts Sync**, **Passkeys/2FA**, **Find My Device**, និង **app ដែល hardcode `com.google.android.gms` តាមរយៈ build `-hw`**។ វាមិនអាចបំពេញ **Play Integrity hardware attestation** បានឡើយ ព្រោះវាជាការផ្ទៀងផ្ទាត់ខាង Google server ជាមួយ hardware key ដែល microG គ្មាន។

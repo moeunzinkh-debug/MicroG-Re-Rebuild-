@@ -84,5 +84,23 @@
     <string name="self_check_name_notifications">ការជូនដំណឹងត្រូវបានអនុញ្ញាត</string>
     <string name="self_check_patched_app_installed">កំពុងប្រតិបត្តិជាមួយ %1$s</string>
     <string name="self_check_action_download_morphe">ដោនឡូដ Morphe</string>
+    <!-- GMS vendor compatibility: which GMS build each patched app expects -->
+    <string name="self_check_cat_gms_compat">ភាពត្រូវគ្នានៃ GMS</string>
+    <string name="self_check_gms_build_is">build នេះឆ្លើយតបជា %1$s</string>
+    <string name="self_check_gms_build_is_resolution">កម្មវិធីដែលបានបំណះអាចភ្ជាប់បានតែទៅ GMS build ដែលវាត្រូវបានបំណះសម្រាប់ប៉ុណ្ណោះ។ កម្មវិធីដែលមិនបានបំណះតែងតែស្វែងរក com.google.android.gms។</string>
+    <string name="self_check_gms_impl_installed">GMS ដែលបានដំឡើង</string>
+    <string name="self_check_gms_impl_resolution">រកឃើញ៖ %1$s</string>
+    <string name="self_check_gms_no_patched_apps">រកមិនឃើញកម្មវិធីដែលបានបំណះ</string>
+    <string name="self_check_gms_app_ok">%1$s ត្រូវបានបំណះសម្រាប់ %2$s (build នេះ)</string>
+    <string name="self_check_gms_app_ok_other">%1$s ត្រូវបានបំណះសម្រាប់ %2$s (ដំឡើងជាមួយគ្នាបាន)</string>
+    <string name="self_check_gms_app_missing">%1$s ត្រូវបានបំណះសម្រាប់ %2$s ដែលមិនបានដំឡើង</string>
+    <string name="self_check_gms_app_missing_resolution">សូមដំឡើង %1$s ឬបំណះ %3$s ឡើងវិញជាមួយ GmsCoreVendorGroupId %4$s។ Package ដែលត្រូវការ៖ %2$s</string>
+    <string name="self_check_gms_app_unknown">%1$s៖ រកមិនឃើញ GMS គោលដៅ</string>
+    <string name="self_check_gms_app_unknown_resolution">សូមបើក %1$s ហើយពិនិត្យថាតើវាអាចចូលគណនីបានទេ។ បើមិនបាន សូមបំណះវាឡើងវិញជាមួយ GmsCoreVendorGroupId %2$s។</string>
+    <string name="gms_vendor_with_package">%1$s (%2$s)</string>
+    <string name="gms_vendor_personal" translatable="false">microG Personal</string>
+    <string name="gms_vendor_user" translatable="false">microG (user build)</string>
+    <string name="gms_vendor_google">Google Play services</string>
+
     <!-- ABI mismatch: arm64 APK on 32-bit userspace -->
 </resources>
